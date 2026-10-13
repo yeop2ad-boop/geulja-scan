@@ -1,34 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#3182f6"/>
+  <rect width="512" height="512" fill="#000"/>
   <!-- 영수증 -->
   <g transform="rotate(4 180 320)">
     <path d="M90 190H270V420L255 434 240 420 225 434 210 420 195 434 180 420 165 434 150 420 135 434 120 420 105 434 90 420Z" fill="#fff"/>
-    <rect x="130" y="222" width="100" height="14" rx="7" fill="#191f28"/>
-    <g fill="#c5ccd3">
-      <rect x="116" y="266" width="84" height="10" rx="5"/><rect x="226" y="266" width="28" height="10" rx="5"/>
-      <rect x="116" y="294" width="68" height="10" rx="5"/><rect x="226" y="294" width="28" height="10" rx="5"/>
-      <rect x="116" y="322" width="92" height="10" rx="5"/><rect x="226" y="322" width="28" height="10" rx="5"/>
-      <rect x="116" y="350" width="60" height="10" rx="5"/><rect x="226" y="350" width="28" height="10" rx="5"/>
+    <rect x="130" y="222" width="100" height="14" rx="7" fill="#000"/>
+    <g fill="#000">
+      <rect x="116" y="270" width="84" height="8" rx="4"/><rect x="226" y="270" width="28" height="8" rx="4"/>
+      <rect x="116" y="304" width="68" height="8" rx="4"/><rect x="226" y="304" width="28" height="8" rx="4"/>
+      <rect x="116" y="338" width="92" height="8" rx="4"/><rect x="226" y="338" width="28" height="8" rx="4"/>
+      <rect x="116" y="372" width="60" height="8" rx="4"/><rect x="226" y="372" width="28" height="8" rx="4"/>
     </g>
-    <rect x="116" y="380" width="138" height="3" fill="#e5e8eb"/>
-    <rect x="186" y="394" width="68" height="14" rx="7" fill="#3182f6"/>
   </g>
   <!-- 핸드폰 -->
   <g transform="rotate(-12 360 220)">
-    <rect x="272" y="62" width="176" height="310" rx="32" fill="#191f28"/>
-    <rect x="284" y="86" width="152" height="262" rx="20" fill="#e8f3ff"/>
-    <rect x="334" y="70" width="52" height="8" rx="4" fill="#3a4452"/>
+    <rect x="272" y="62" width="176" height="310" rx="32" fill="#000" stroke="#fff" stroke-width="12"/>
+    <rect x="296" y="102" width="128" height="230" rx="12" fill="#fff"/>
+    <rect x="326" y="76" width="68" height="8" rx="4" fill="#fff"/>
     <!-- 화면 속 영수증 -->
-    <rect x="318" y="126" width="84" height="150" rx="6" fill="#fff"/>
-    <rect x="332" y="142" width="56" height="8" rx="4" fill="#191f28"/>
-    <g fill="#c5ccd3"><rect x="330" y="166" width="42" height="6" rx="3"/><rect x="330" y="182" width="34" height="6" rx="3"/><rect x="330" y="198" width="46" height="6" rx="3"/><rect x="330" y="214" width="30" height="6" rx="3"/></g>
+    <rect x="334" y="146" width="52" height="8" rx="4" fill="#000"/>
+    <g fill="#000"><rect x="334" y="174" width="52" height="6" rx="3"/><rect x="334" y="192" width="40" height="6" rx="3"/><rect x="334" y="210" width="52" height="6" rx="3"/><rect x="334" y="228" width="34" height="6" rx="3"/></g>
     <!-- 촬영 프레임 -->
-    <g fill="none" stroke="#3182f6" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M302 150V118h32M418 150V118h-32M302 262v32h32M418 262v32h-32"/>
-    </g>
-    <!-- 셔터 -->
-    <circle cx="360" cy="322" r="15" fill="#3182f6"/><circle cx="360" cy="322" r="9" fill="#fff"/>
+    <path d="M310 142V118h24M410 142V118h-24M310 292v24h24M410 292v24h-24" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <!-- 스캔 반짝임 -->
-  <g fill="#fff"><path d="M92 112l8 20 20 8-20 8-8 20-8-20-20-8 20-8z"/><path d="M180 70l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" opacity=".8"/></g>
 </svg>
