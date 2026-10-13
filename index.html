@@ -13,37 +13,42 @@
 <header class="top">
   <div class="brand"><span class="logo">▦</span> 글자스캔정리</div>
   <div class="tabs">
-    <button class="tab active" data-tab="pattern">1 패턴정리</button>
+    <button class="tab active">1 패턴정리</button>
     <button class="tab disabled" disabled>2 준비중</button>
   </div>
 </header>
 
 <main>
-  <section id="pickView">
-    <p class="lead">종이·표·영수증·명단을 찍으면<br>같은 위치·같은 글자가 반복되는 구간을 찾아<br>표로 정리해 드려요.</p>
-    <div class="pick-btns">
-      <label class="btn primary big">📷 사진 찍기
-        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-      </label>
-      <label class="btn big">🖼 앨범에서 선택
-        <input type="file" id="fileInput" accept="image/*" hidden>
-      </label>
-    </div>
-    <p class="hint">팁: 글자가 가로로 반듯하게, 그림자 없이 찍으면 정확도가 올라가요.</p>
+  <!-- 프로젝트 목록 -->
+  <section id="homeView">
+    <button class="btn primary big full" id="newProjBtn">＋ 새 프로젝트</button>
+    <p class="hint left">프로젝트에 사진을 여러 장 넣으면 한꺼번에 패턴을 찾고,<br>같은 패턴끼리 합쳐서 엑셀·문서로 정리해요.</p>
+    <div id="projList"></div>
   </section>
 
-  <section id="workView" hidden>
-    <div class="photo-wrap">
-      <img id="photo" alt="촬영한 사진">
-      <div class="progress" id="progress" hidden>
-        <div class="bar"><div class="fill" id="fill"></div></div>
-        <div class="ptext" id="ptext">준비 중…</div>
+  <!-- 프로젝트 화면 -->
+  <section id="projView" hidden>
+    <div class="proj-head">
+      <button class="btn small" id="backBtn">← 목록</button>
+      <input id="projName" class="proj-name">
+      <button class="x" id="delProjBtn" title="프로젝트 삭제">🗑</button>
+    </div>
+    <div class="add-btns">
+      <label class="btn primary">📷 사진 찍기
+        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn">🖼 사진 여러 장 추가
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      </label>
+    </div>
+    <div id="queueInfo" class="queue" hidden></div>
+    <div id="items"></div>
+
+    <div id="resultBox" hidden>
+      <div class="seg">
+        <button class="segbtn active" data-mode="merged">같은 패턴 합치기</button>
+        <button class="segbtn" data-mode="photo">사진별 보기</button>
       </div>
-    </div>
-    <div class="row-btns">
-      <button class="btn" id="againBtn">다시 찍기</button>
-    </div>
-    <div id="result" hidden>
       <div id="repeats" class="repeats"></div>
       <div id="sections"></div>
       <div class="export-bar">
@@ -52,7 +57,6 @@
         <button class="btn" id="copyBtn">복사</button>
       </div>
     </div>
-    <p class="err" id="err" hidden></p>
   </section>
 </main>
 
