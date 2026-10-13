@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f8f5f">
+<title>글자스캔정리</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">▦</span> 글자스캔정리</div>
+  <div class="tabs">
+    <button class="tab active" data-tab="pattern">1 패턴정리</button>
+    <button class="tab disabled" disabled>2 준비중</button>
+  </div>
+</header>
+
+<main>
+  <section id="pickView">
+    <p class="lead">종이·표·영수증·명단을 찍으면<br>같은 위치·같은 글자가 반복되는 구간을 찾아<br>표로 정리해 드려요.</p>
+    <div class="pick-btns">
+      <label class="btn primary big">📷 사진 찍기
+        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn big">🖼 앨범에서 선택
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </label>
+    </div>
+    <p class="hint">팁: 글자가 가로로 반듯하게, 그림자 없이 찍으면 정확도가 올라가요.</p>
+  </section>
+
+  <section id="workView" hidden>
+    <div class="photo-wrap">
+      <img id="photo" alt="촬영한 사진">
+      <div class="progress" id="progress" hidden>
+        <div class="bar"><div class="fill" id="fill"></div></div>
+        <div class="ptext" id="ptext">준비 중…</div>
+      </div>
+    </div>
+    <div class="row-btns">
+      <button class="btn" id="againBtn">다시 찍기</button>
+    </div>
+    <div id="result" hidden>
+      <div id="repeats" class="repeats"></div>
+      <div id="sections"></div>
+      <div class="export-bar">
+        <button class="btn primary" id="xlsxBtn">엑셀로 저장</button>
+        <button class="btn" id="docBtn">문서(Word)로 저장</button>
+        <button class="btn" id="copyBtn">복사</button>
+      </div>
+    </div>
+    <p class="err" id="err" hidden></p>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="analyze.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
