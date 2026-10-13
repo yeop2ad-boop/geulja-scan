@@ -12,10 +12,6 @@
 <body>
 <header class="top">
   <div class="brand"><img class="logo-img" src="icon.svg" alt=""> 글자스캔정리</div>
-  <div class="tabs">
-    <button class="tab active">1 패턴정리</button>
-    <button class="tab disabled" disabled>2 준비중</button>
-  </div>
 </header>
 
 <main>
@@ -61,9 +57,24 @@
   </section>
 </main>
 
+<div id="viewer" hidden>
+  <div class="vhead"><div><b id="vTitle"></b> <span id="vCount"></span></div><button class="vclose" id="vClose">닫기</button></div>
+  <div id="vstage">
+    <div id="vimg"><img id="vphoto" alt="" draggable="false"><div id="vlayer"></div></div>
+    <button class="vnav l" id="vPrev" aria-label="이전">‹</button><button class="vnav r" id="vNext" aria-label="다음">›</button>
+  </div>
+  <div class="vfoot">
+    <div id="vStatus" class="vstatus"></div>
+    <div class="vlegend2"><button class="lg ok" id="vOk"></button><button class="lg bad" id="vBad"></button></div>
+    <div class="vhelp">두 손가락으로 확대·축소 · 두 번 탭하면 확대 · 옆으로 밀면 다음 사진</div>
+  </div>
+</div>
+
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="analyze.js"></script>
 <script src="app.js"></script>
+<script src="viewer.js"></script>
 </body>
 </html>

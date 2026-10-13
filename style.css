@@ -81,3 +81,46 @@ td:focus,th:focus{background:var(--pl);border-radius:8px}
 .err{color:var(--red);text-align:center}
 [hidden]{display:none!important}
 .logo-img{width:24px;height:24px;border-radius:7px;vertical-align:-6px;margin-right:6px}
+.top{padding-bottom:10px}
+/* 갤러리 */
+.gal{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.gitem .iname{margin-top:6px;font-size:13px;text-align:center}
+.gcard{position:relative;aspect-ratio:4/3;border-radius:16px;overflow:hidden;background:#fff;cursor:zoom-in;box-shadow:inset 0 0 0 1px var(--ln)}
+.gcard img{width:100%;height:100%;object-fit:contain;display:block}
+.gdel{position:absolute;top:6px;right:6px;width:26px;height:26px;border:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:12px;cursor:pointer;padding:0}
+.gbadge{position:absolute;left:6px;bottom:6px;font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;color:#fff;backdrop-filter:blur(4px)}
+.gbadge.ok{background:rgba(22,163,74,.85)}
+.gbadge.bad{background:rgba(220,38,38,.85)}
+.gscan{position:absolute;inset:auto 0 0 0;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff;font-size:12px;font-weight:700}
+.gscan .bar{background:rgba(255,255,255,.3)}
+.gscan .fill{background:#fff}
+.gitem.run .gcard::after{content:"";position:absolute;left:0;right:0;height:3px;background:#34d399;box-shadow:0 0 12px #34d399;animation:sc 1.6s ease-in-out infinite alternate}
+@keyframes sc{from{top:5%}to{top:92%}}
+.note.err{color:#dc2626;text-align:center}
+/* 뷰어 */
+#viewer{position:fixed;inset:0;z-index:20;background:#000;color:#fff;display:flex;flex-direction:column}
+.vhead{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:15px}
+.vhead span{color:#999;margin-left:6px;font-size:13px}
+.vclose{border:0;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px;padding:8px 14px;border-radius:999px;cursor:pointer}
+#vstage{position:relative;flex:1;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#vimg{position:absolute;left:50%;top:50%;transform-origin:center;will-change:transform}
+#vphoto{width:100%;height:100%;display:block;pointer-events:none;border-radius:4px}
+#vlayer{position:absolute;inset:0;pointer-events:none}
+.vb{position:absolute;border-radius:4px}
+.vb.ok{background:rgba(34,197,94,.26);border:2px solid rgba(34,197,94,.9)}
+.vb.ok i{position:absolute;left:-2px;top:-2px;transform-origin:top left;transform:scale(var(--inv,1));display:grid;place-items:center;width:22px;height:22px;background:#16a34a;color:#fff;font:700 13px/1 sans-serif;border-radius:4px 0 6px 0;font-style:normal}
+.vb.bad{background:rgba(239,68,68,.32);border:1.5px solid rgba(239,68,68,.95)}
+#vlayer.hide-ok .vb.ok{display:none}
+#vlayer.hide-bad .vb.bad{display:none}
+.vnav{position:absolute;top:50%;margin-top:-26px;width:44px;height:52px;border:0;background:rgba(255,255,255,.14);color:#fff;font-size:30px;line-height:1;cursor:pointer;border-radius:12px;display:none}
+.vnav.l{left:8px}.vnav.r{right:8px}
+.vnav:disabled{opacity:.25}
+@media (hover:hover) and (pointer:fine){.vnav{display:block}}
+.vfoot{padding:12px 16px calc(14px + env(safe-area-inset-bottom));text-align:center}
+.vstatus{color:#fca5a5;font-size:13px;min-height:0}
+.vlegend2{display:flex;gap:8px;justify-content:center;margin:6px 0 8px}
+.lg{border:0;border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;color:#fff;cursor:pointer}
+.lg.ok{background:rgba(34,197,94,.55)}
+.lg.bad{background:rgba(239,68,68,.55)}
+.lg.off{background:rgba(255,255,255,.14);color:#aaa;text-decoration:line-through}
+.vhelp{color:#777;font-size:12px}

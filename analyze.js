@@ -4,6 +4,11 @@
   const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
   const isNum = t => /^[-+₩$]?[\d,.]+\s*(원|%|개|건|명|kg|g|ml|L)?$/.test(String(t).trim());
   const norm = t => String(t).replace(/[\d\s,.:：()\-_/]/g, '');
+  // 구간이 사진의 어디에 있는지 (OCR 이미지 좌표)
+  const boxOf = ls => ({
+    x0: Math.min(...ls.map(l => l.cells[0].x0)), x1: Math.max(...ls.map(l => l.cells[l.cells.length - 1].x1)),
+    y0: Math.min(...ls.map(l => l.y0)), y1: Math.max(...ls.map(l => l.y1))
+  });
 
   function buildLines(words, medH) {
     const ws = [...words].sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1));
@@ -140,6 +145,7 @@
         const t = tableFromRegion(rl, medH);
         placed.push({ order: r.from, s: { type: 'table', title: `표 ${++tn}`, headers: t.headers, rows: t.rows, note: `${t.cols}개 열 · ${t.rows.length}줄이 같은 위치에 정렬되어 있어요` } });
       }
+      placed[placed.length - 1].s.box = boxOf(rl);
     }
 
     // 2) 표가 아닌 줄: 항목명:값 반복 → 레코드, 나머지 → 일반 글자
@@ -156,6 +162,7 @@
         }
       }
       if (!handled) placed.push({ order: buf[0].i, s: { type: 'text', title: '일반 글자', headers: ['내용'], rows: buf.map(b => [b.ln.cells.map(c => c.text).join(' ')]), note: '반복 패턴이 없는 줄이에요' } });
+      placed[placed.length - 1].s.box = boxOf(buf.map(b => b.ln));
       buf = [];
     };
     for (let i = 0; i < n; i++) {

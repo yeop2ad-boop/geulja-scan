@@ -17,6 +17,22 @@ function save() {
   }, 300);
 }
 
+// 확인 화면용 사진 미리보기는 IndexedDB에 보관 (localStorage 용량 보호)
+const idb = new Promise(res => {
+  try {
+    const r = indexedDB.open('gs_imgs', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('img');
+    r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+  } catch { res(null); }
+});
+const idbDo = async (mode, fn) => {
+  const db = await idb; if (!db) return null;
+  return new Promise(res => { const t = db.transaction('img', mode); const rq = fn(t.objectStore('img')); t.oncomplete = () => res(rq && rq.result); t.onerror = () => res(null); });
+};
+const putImg = (id, blob) => idbDo('readwrite', s => s.put(blob, id));
+const getImg = id => idbDo('readonly', s => s.get(id));
+const delImg = id => idbDo('readwrite', s => s.delete(id));
+
 let cur = null;      // 현재 프로젝트
 let mode = 'merged'; // 합치기 / 사진별
 const jobs = [];     // 처리 대기열 {proj,item,canvas}
@@ -48,7 +64,7 @@ function newProject() {
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file), img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const k = Math.min(1, 2200 / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
@@ -56,11 +72,17 @@ function loadImage(file) {
       g.filter = 'grayscale(1) contrast(1.35)';
       g.drawImage(img, 0, 0, c.width, c.height);
       // 썸네일
-      const t = document.createElement('canvas'), tk = 120 / Math.max(img.width, img.height);
+      const t = document.createElement('canvas'), tk = 320 / Math.max(img.width, img.height);
       t.width = Math.max(1, Math.round(img.width * tk)); t.height = Math.max(1, Math.round(img.height * tk));
       t.getContext('2d').drawImage(img, 0, 0, t.width, t.height);
+      // 확인 화면용 미리보기(원본 색상, 900px)
+      const pk = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const pv = document.createElement('canvas');
+      pv.width = Math.round(img.width * pk); pv.height = Math.round(img.height * pk);
+      pv.getContext('2d').drawImage(img, 0, 0, pv.width, pv.height);
+      const preview = await new Promise(r => pv.toBlob(r, 'image/jpeg', 0.8));
       URL.revokeObjectURL(url);
-      resolve({ canvas: c, thumb: t.toDataURL('image/jpeg', 0.6) });
+      resolve({ canvas: c, thumb: t.toDataURL('image/jpeg', 0.6), preview });
     };
     img.onerror = () => reject(new Error('사진을 열 수 없어요'));
     img.src = url;
@@ -78,10 +100,64 @@ function addFiles(files) {
   save(); renderProject(); runQueue();
 }
 
+// words: 분석에 쓰는 글자 / weak: 흐리거나 인식 신뢰도가 낮은 부분(같은 줄에서 이어진 것끼리 박스로 합침)
 function wordsFrom(data) {
   let ws = data.words;
   if (!ws && data.blocks) ws = data.blocks.flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words)));
-  return (ws || []).filter(w => w.confidence > 30).map(w => ({ text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 }));
+  ws = (ws || []).map(w => ({ text: w.text, conf: w.confidence, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 }));
+  const words = ws.filter(w => w.conf > 30);
+  const bad = ws.filter(w => w.conf < 65 && /[\p{L}\p{N}]/u.test(w.text)).sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1) || a.x0 - b.x0);
+  const weak = [];
+  for (const w of bad) {
+    const h = w.y1 - w.y0, last = weak[weak.length - 1];
+    if (last && Math.abs((last.y0 + last.y1) / 2 - (w.y0 + w.y1) / 2) < h * 0.6 && w.x0 - last.x1 < h * 1.5) {
+      last.x1 = Math.max(last.x1, w.x1); last.y0 = Math.min(last.y0, w.y0); last.y1 = Math.max(last.y1, w.y1);
+    } else weak.push({ x0: w.x0, y0: w.y0, x1: w.x1, y1: w.y1 });
+  }
+  return { words, weak: weak.slice(0, 80) };
+}
+
+// 사진 자체의 선명도를 격자로 검사: 글자(대비)는 있는데 경계가 뭉개진 구간 = 흐림.
+// 인식 신뢰도만으로는 "아예 못 읽은" 흐린 부분을 놓치므로 이미지에서 직접 찾는다.
+function blurBoxes(canvas) {
+  const w = canvas.width, h = canvas.height;
+  const px = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  const T = Math.max(12, Math.round(Math.max(w, h) / 55));
+  const gx = Math.ceil(w / T), gy = Math.ceil(h / T);
+  const rng = new Float32Array(gx * gy), grad = new Float32Array(gx * gy);
+  for (let ty = 0; ty < gy; ty++) for (let tx = 0; tx < gx; tx++) {
+    let mn = 255, mx = 0, g = 0;
+    const x1 = Math.min(w - 1, (tx + 1) * T), y1 = Math.min(h - 1, (ty + 1) * T);
+    for (let y = ty * T; y < y1; y++) for (let x = tx * T; x < x1; x++) {
+      const v = px[(y * w + x) * 4];
+      if (v < mn) mn = v; if (v > mx) mx = v;
+      const dx = Math.abs(v - px[(y * w + x + 1) * 4]), dy = Math.abs(v - px[((y + 1) * w + x) * 4]);
+      if (dx > g) g = dx; if (dy > g) g = dy;
+    }
+    rng[ty * gx + tx] = mx - mn; grad[ty * gx + tx] = g;
+  }
+  const ink = [...grad.keys()].filter(i => rng[i] > 80);
+  if (ink.length < 4) return [];
+  const sorted = ink.map(i => grad[i]).sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  const flag = new Uint8Array(gx * gy);
+  ink.forEach(i => { if (grad[i] < med * 0.45 || grad[i] < 55) flag[i] = 1; });
+  // 이웃한 칸 묶기
+  const seen = new Uint8Array(gx * gy), out = [];
+  for (let s = 0; s < flag.length; s++) {
+    if (!flag[s] || seen[s]) continue;
+    const st = [s]; seen[s] = 1; let x0 = gx, y0 = gy, x1 = 0, y1 = 0, n = 0;
+    while (st.length) {
+      const i = st.pop(), x = i % gx, y = (i / gx) | 0; n++;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= gx || ny >= gy) continue;
+        const j = ny * gx + nx; if (flag[j] && !seen[j]) { seen[j] = 1; st.push(j); }
+      }
+    }
+    if (n >= 2) out.push({ x0: x0 * T, y0: y0 * T, x1: Math.min(w, (x1 + 1) * T), y1: Math.min(h, (y1 + 1) * T) });
+  }
+  return out;
 }
 
 async function runQueue() {
@@ -93,16 +169,18 @@ async function runQueue() {
       const job = jobs.shift(), item = job.item;
       curItem = item; item.status = 'run'; item.progress = 0.02; refresh();
       try {
-        const { canvas, thumb } = await loadImage(job.file);
-        item.thumb = thumb;
+        const { canvas, thumb, preview } = await loadImage(job.file);
+        item.thumb = thumb; item.w = canvas.width; item.h = canvas.height;
+        putImg(item.id, preview); refresh();
         if (typeof Tesseract === 'undefined') throw new Error('글자 인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
         if (!worker) worker = await Tesseract.createWorker('kor+eng', 1, {
           logger: m => { if (m.status === 'recognizing text' && curItem) { curItem.progress = 0.1 + m.progress * 0.85; refreshProgress(); } }
         });
         const { data } = await worker.recognize(canvas);
-        const words = wordsFrom(data);
+        const { words, weak } = wordsFrom(data);
         if (!words.length) throw new Error('글자를 찾지 못했어요');
         const res = GSAnalyze.analyze(words);
+        item.weak = [...blurBoxes(canvas), ...weak].slice(0, 80);
         item.sections = res.sections; item.repeats = res.repeats; item.status = 'done';
       } catch (e) { item.status = 'error'; item.error = e.message || String(e); }
       curItem = null; item.progress = 1; save(); refresh();
@@ -119,21 +197,47 @@ function refreshProgress() {
 }
 
 // ---------- 같은 패턴 합치기 ----------
+// 글자 인식 오차를 감안해 제목이 비슷하면(편집거리 기준) 같은 패턴으로 봄
+function lev(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+const simText = (a, b) => {
+  a = a.replace(/\s/g, ''); b = b.replace(/\s/g, '');
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  return 1 - lev(a, b) / Math.max(a.length, b.length);
+};
+const numCols = s => s.headers.map((_, c) => s.rows.filter(r => GSAnalyze.isNum(r[c] || '')).length * 2 > s.rows.length);
+function samePattern(g, s) {
+  if (g.headers.length - 1 !== s.headers.length) return false;
+  const nc = numCols(s);
+  let fuzzy = 0;
+  for (let c = 0; c < s.headers.length; c++) {
+    const sim = simText(g.headers[c + 1], s.headers[c]);
+    if (sim < 0.5 || nc[c] !== g.num[c]) return false;
+    if (sim < 1) fuzzy++;
+  }
+  return fuzzy <= Math.ceil(s.headers.length / 2);
+}
 function mergeSections(items) {
-  const groups = new Map();
+  const groups = [];
   items.filter(i => i.status === 'done').forEach(it => it.sections.forEach(s => {
-    const key = s.type === 'text' ? 'text' : s.headers.join('\u0001');
-    let g = groups.get(key);
-    if (!g) groups.set(key, g = { type: s.type === 'text' ? 'text' : 'table', headers: ['사진', ...s.headers], rows: [], photos: new Set(), kind: s.type });
+    let g = groups.find(x => (s.type === 'text') === (x.type === 'text') && (s.type === 'text' || samePattern(x, s)));
+    if (!g) groups.push(g = { type: s.type === 'text' ? 'text' : 'table', headers: ['사진', ...s.headers], num: numCols(s), rows: [], photos: new Set(), kind: s.type, fuzzy: false });
+    else if (s.type !== 'text' && s.headers.some((h, c) => h !== g.headers[c + 1])) g.fuzzy = true;
     s.rows.forEach(r => g.rows.push([it.name, ...r]));
     g.photos.add(it.name);
   }));
   let n = 0;
-  return [...groups.values()].sort((a, b) => (a.type === 'text') - (b.type === 'text') || b.rows.length - a.rows.length).map(g => ({
+  return groups.sort((a, b) => (a.type === 'text') - (b.type === 'text') || b.rows.length - a.rows.length).map(g => ({
     type: g.kind,
     title: g.type === 'text' ? '일반 글자' : `패턴 ${++n}: ${g.headers.slice(1, 4).join('·')}`,
     headers: g.headers, rows: g.rows,
-    note: g.type === 'text' ? `${g.photos.size}장의 반복 없는 글자` : `${g.photos.size}장에서 같은 패턴 발견 · 총 ${g.rows.length}줄`
+    note: g.type === 'text' ? `${g.photos.size}장의 반복 없는 글자` : `${g.photos.size}장에서 같은 패턴 발견 · 총 ${g.rows.length}줄${g.fuzzy ? ' · 비슷한 제목도 함께 묶었어요' : ''}`
   }));
 }
 function perPhoto(items) {
@@ -145,16 +249,19 @@ const exportSections = () => (mode === 'merged' ? mergeSections(cur.items) : per
 const STATUS = { wait: '대기 중', run: '글자 읽는 중…', done: '완료', error: '실패' };
 function renderProject() {
   const items = cur.items;
-  $('#items').innerHTML = items.map((it, idx) => `
-    <div class="item ${it.status}">
-      ${it.thumb ? `<img src="${it.thumb}" alt="">` : '<div class="ph"></div>'}
-      <div class="item-main">
-        <input class="iname" data-iname="${it.id}" value="${esc(it.name)}">
-        <div class="note">${it.status === 'error' ? esc(it.error || '') : STATUS[it.status]}${it.status === 'done' ? ` · 구간 ${it.sections.length}개` : ''}</div>
-        ${it.status === 'run' ? `<div class="bar"><div class="fill" style="width:${Math.round(it.progress * 100)}%"></div></div>` : ''}
+  // 갤러리: 사진을 크게 보여주고, 누르면 확대·인식 구간 확인 화면으로
+  $('#items').innerHTML = items.length ? `<div class="gal">${items.map(it => `
+    <div class="gitem ${it.status}">
+      <div class="gcard" ${it.thumb ? `data-view="${it.id}"` : ''}>
+        ${it.thumb ? `<img src="${it.thumb}" alt="" data-view="${it.id}">` : ''}
+        <button class="gdel" data-delitem="${it.id}" title="사진 삭제">✕</button>
+        ${it.status === 'done' ? `<span class="gbadge ok">✓ 구간 ${it.sections.length}</span>` : ''}
+        ${it.status === 'error' ? `<span class="gbadge bad">실패</span>` : ''}
+        ${it.status === 'run' || it.status === 'wait' ? `<div class="gscan"><span>${it.status === 'run' ? '읽는 중' : '대기 중'}</span>${it.status === 'run' ? `<div class="bar"><div class="fill" style="width:${Math.round(it.progress * 100)}%"></div></div>` : ''}</div>` : ''}
       </div>
-      <button class="x" data-delitem="${it.id}" title="사진 삭제">✕</button>
-    </div>`).join('') || '<p class="hint">사진을 추가해 보세요. 여러 장을 한 번에 고를 수 있어요.</p>';
+      <input class="iname" data-iname="${it.id}" value="${esc(it.name)}">
+      ${it.status === 'error' ? `<div class="note err">${esc(it.error || '')}</div>` : ''}
+    </div>`).join('')}</div>` : '<p class="hint">사진을 추가해 보세요. 여러 장을 한 번에 고를 수 있어요.</p>';
 
   const pending = items.filter(i => i.status === 'wait' || i.status === 'run').length;
   const q = $('#queueInfo');
@@ -206,7 +313,8 @@ document.addEventListener('change', e => {
 document.addEventListener('click', e => {
   const t = e.target, d = t.dataset;
   if (d.del != null) { cur.items.find(i => i.id === d.i).sections.splice(+d.del, 1); save(); renderProject(); }
-  if (d.delitem) { cur.items = cur.items.filter(i => i.id !== d.delitem); for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].item.id === d.delitem) jobs.splice(k, 1); save(); renderProject(); }
+  if (d.view) openViewer(d.view);
+  if (d.delitem) { delImg(d.delitem); cur.items =cur.items.filter(i => i.id !== d.delitem); for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].item.id === d.delitem) jobs.splice(k, 1); save(); renderProject(); }
   if (d.mode) { mode = d.mode; renderProject(); }
   const card = t.closest('[data-open]'); if (card) openProject(card.dataset.open);
 });
@@ -214,6 +322,7 @@ $('#newProjBtn').onclick = newProject;
 $('#backBtn').onclick = () => { save(); showHome(); };
 $('#delProjBtn').onclick = () => {
   if (!confirm(`'${cur.name}' 프로젝트를 삭제할까요? 정리 결과가 모두 사라져요.`)) return;
+  cur.items.forEach(i => delImg(i.id));
   jobs.splice(0, jobs.length, ...jobs.filter(j => j.proj !== cur));
   projects = projects.filter(p => p !== cur); save(); showHome();
 };
