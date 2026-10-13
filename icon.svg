@@ -21,7 +21,7 @@
   </defs>
   <rect width="512" height="512" fill="url(#bg)"/>
   <circle cx="420" cy="90" r="170" fill="#fff" opacity=".05"/>
-  <g transform="translate(256 18) scale(.78) translate(-256 0)">
+  <g transform="translate(256 256) scale(1.2) translate(-268 -248)">
 
   <!-- 영수증 -->
   <g transform="rotate(4 180 320)" filter="url(#sh)">
@@ -66,5 +66,4 @@
     <circle cx="360" cy="334" r="12" fill="none" stroke="#1d4fd8" stroke-width="3"/><circle cx="360" cy="334" r="7" fill="#1d4fd8"/>
   </g>
   </g>
-  <text x="256" y="466" text-anchor="middle" font-family="Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="62" font-weight="800" fill="#fff" letter-spacing="-1">글자스캔정리</text>
 </svg>
