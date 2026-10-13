@@ -21,9 +21,10 @@
 <main>
   <!-- 프로젝트 목록 -->
   <section id="homeView">
-    <button class="btn primary big full" id="newProjBtn">＋ 새 프로젝트</button>
-    <p class="hint left">프로젝트에 사진을 여러 장 넣으면 한꺼번에 패턴을 찾고,<br>같은 패턴끼리 합쳐서 엑셀·문서로 정리해요.</p>
+    <h1 class="h1">사진만 찍으면<br>표로 정리해 드려요</h1>
+    <p class="sub">여러 장을 한꺼번에 올리면 같은 패턴끼리 모아서<br>엑셀과 문서로 만들어 줘요.</p>
     <div id="projList"></div>
+    <button class="btn primary big full" id="newProjBtn">새 프로젝트 만들기</button>
   </section>
 
   <!-- 프로젝트 화면 -->
@@ -31,13 +32,13 @@
     <div class="proj-head">
       <button class="btn small" id="backBtn">← 목록</button>
       <input id="projName" class="proj-name">
-      <button class="x" id="delProjBtn" title="프로젝트 삭제">🗑</button>
+      <button class="x" id="delProjBtn" title="프로젝트 삭제">삭제</button>
     </div>
     <div class="add-btns">
-      <label class="btn primary">📷 사진 찍기
+      <label class="btn primary">촬영하기
         <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
       </label>
-      <label class="btn">🖼 사진 여러 장 추가
+      <label class="btn">앨범에서 여러 장
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
       </label>
     </div>
@@ -53,7 +54,7 @@
       <div id="sections"></div>
       <div class="export-bar">
         <button class="btn primary" id="xlsxBtn">엑셀로 저장</button>
-        <button class="btn" id="docBtn">문서(Word)로 저장</button>
+        <button class="btn" id="docBtn">Word로 저장</button>
         <button class="btn" id="copyBtn">복사</button>
       </div>
     </div>
