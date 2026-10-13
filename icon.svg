@@ -1,67 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d4fd8"/><stop offset="1" stop-color="#0b2a6f"/>
-    </linearGradient>
-    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2b3547"/><stop offset="1" stop-color="#0b1020"/>
-    </linearGradient>
-    <linearGradient id="scr" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#eaf1fb"/><stop offset="1" stop-color="#cfdcf0"/>
-    </linearGradient>
-    <linearGradient id="scan" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#3182f6" stop-opacity="0"/><stop offset=".5" stop-color="#3182f6"/><stop offset="1" stop-color="#3182f6" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="sh" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#020a24" flood-opacity=".45"/>
-    </filter>
-    <filter id="sh2" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0b1020" flood-opacity=".18"/>
-    </filter>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#0b2a6f"/></linearGradient>
+    <linearGradient id="scr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e40af"/><stop offset="1" stop-color="#0f2a78"/></linearGradient>
+    <filter id="glow" x="-20%" y="-300%" width="140%" height="700%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#020a24" flood-opacity=".4"/></filter>
   </defs>
   <rect width="512" height="512" fill="url(#bg)"/>
-  <circle cx="420" cy="90" r="170" fill="#fff" opacity=".05"/>
-
-  <!-- 영수증 -->
-  <g transform="rotate(4 180 320)" filter="url(#sh)">
-    <path d="M86 186H270V424L255 438 240 424 225 438 210 424 195 438 180 424 165 438 150 424 135 438 120 424 105 438 90 424 86 424Z" fill="#fff"/>
-    <rect x="112" y="214" width="92" height="12" rx="6" fill="#0f172a"/>
-    <rect x="112" y="236" width="56" height="7" rx="3.5" fill="#94a3b8"/>
-    <rect x="112" y="258" width="146" height="2" fill="#e2e8f0"/>
-    <g fill="#cbd5e1">
-      <rect x="112" y="276" width="78" height="8" rx="4"/><rect x="226" y="276" width="32" height="8" rx="4"/>
-      <rect x="112" y="300" width="62" height="8" rx="4"/><rect x="226" y="300" width="32" height="8" rx="4"/>
-      <rect x="112" y="324" width="88" height="8" rx="4"/><rect x="226" y="324" width="32" height="8" rx="4"/>
-      <rect x="112" y="348" width="56" height="8" rx="4"/><rect x="226" y="348" width="32" height="8" rx="4"/>
-    </g>
-    <rect x="112" y="372" width="146" height="2" fill="#e2e8f0"/>
-    <rect x="112" y="388" width="44" height="10" rx="5" fill="#0f172a"/>
-    <rect x="206" y="386" width="52" height="14" rx="7" fill="#1d4fd8"/>
-  </g>
-
-  <!-- 핸드폰 -->
-  <g transform="rotate(-12 360 220)" filter="url(#sh)">
-    <rect x="270" y="58" width="180" height="318" rx="34" fill="url(#body)"/>
-    <rect x="271" y="59" width="178" height="316" rx="33" fill="none" stroke="#5b6b86" stroke-width="2" opacity=".7"/>
-    <rect x="284" y="72" width="152" height="290" rx="24" fill="url(#scr)"/>
-    <rect x="336" y="82" width="48" height="12" rx="6" fill="#0b1020"/>
-    <!-- 화면 속 영수증 -->
-    <g filter="url(#sh2)">
-      <rect x="316" y="124" width="88" height="152" rx="6" fill="#fff"/>
-    </g>
-    <rect x="330" y="140" width="40" height="7" rx="3.5" fill="#0f172a"/>
-    <g fill="#cbd5e1">
-      <rect x="330" y="162" width="46" height="5" rx="2.5"/><rect x="330" y="178" width="36" height="5" rx="2.5"/>
-      <rect x="330" y="194" width="50" height="5" rx="2.5"/><rect x="330" y="210" width="32" height="5" rx="2.5"/>
-      <rect x="330" y="226" width="44" height="5" rx="2.5"/>
-    </g>
-    <rect x="330" y="248" width="30" height="8" rx="4" fill="#1d4fd8"/>
+  <g transform="rotate(-7 256 256)">
+    <!-- 폰 -->
+    <rect x="128" y="36" width="256" height="440" rx="56" fill="#fff" filter="url(#sh)"/>
+    <rect x="148" y="56" width="216" height="400" rx="40" fill="url(#scr)"/>
+    <rect x="226" y="68" width="60" height="12" rx="6" fill="#0b1020"/>
+    <!-- 영수증 -->
+    <path d="M196 140H316V372L304 384 292 372 280 384 268 372 256 384 244 372 232 384 220 372 208 384 196 372Z" fill="#fff"/>
+    <g fill="#1e40af"><rect x="216" y="168" width="64" height="14" rx="7"/><rect x="216" y="204" width="80" height="12" rx="6"/><rect x="216" y="236" width="80" height="12" rx="6"/><rect x="216" y="300" width="80" height="12" rx="6"/><rect x="216" y="332" width="48" height="12" rx="6"/></g>
+    <!-- 스캔 프레임 -->
+    <path d="M176 188V128h60M336 188V128h-60M176 396V336h60M336 396V336h-60" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
     <!-- 스캔 라인 -->
-    <rect x="304" y="196" width="112" height="4" rx="2" fill="url(#scan)"/>
-    <rect x="304" y="190" width="112" height="16" fill="url(#scan)" opacity=".18"/>
-    <!-- 촬영 프레임 -->
-    <path d="M304 150V112h38M416 150V112h-38M304 266v38h38M416 266v38h-38" fill="none" stroke="#1d4fd8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <!-- 셔터 -->
-    <circle cx="360" cy="334" r="12" fill="none" stroke="#1d4fd8" stroke-width="3"/><circle cx="360" cy="334" r="7" fill="#1d4fd8"/>
+    <rect x="166" y="262" width="180" height="12" rx="6" fill="#5eead4" filter="url(#glow)"/>
   </g>
 </svg>
