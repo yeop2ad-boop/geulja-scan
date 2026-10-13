@@ -80,3 +80,4 @@ td:focus,th:focus{background:var(--pl);border-radius:8px}
 .export-bar .primary{grid-column:1/-1;padding:18px;font-size:17px;border-radius:16px}
 .err{color:var(--red);text-align:center}
 [hidden]{display:none!important}
+.logo-img{width:24px;height:24px;border-radius:7px;vertical-align:-6px;margin-right:6px}
