@@ -47,6 +47,17 @@
       </div>
       <div id="repeats" class="repeats"></div>
       <div id="sections"></div>
+      <section id="tools">
+        <h3 class="tools-title">더 많은 기능</h3>
+        <div class="tools-grid">
+          <button class="tool" data-tool="pick"><b>선택 추출</b><span>선을 그은 부분의 글자만 모으기</span></button>
+          <button class="tool" data-tool="find"><b>검색해서 모으기</b><span>단어가 들어간 줄만 모든 사진에서</span></button>
+          <button class="tool" data-tool="style"><b>글자 색·크기별 보기</b><span>같은 색·같은 크기 글자끼리 모아 읽기</span></button>
+          <button class="tool" data-tool="sum"><b>숫자 합계</b><span>숫자 열의 합계·평균</span></button>
+          <button class="tool" data-tool="dedupe" id="dedupeBtn"><b>중복 줄 제거</b><span id="dedupeState">같은 내용 줄을 하나로 · 꺼짐</span></button>
+        </div>
+        <div id="extras"></div>
+      </section>
       <div class="export-bar">
         <button class="btn primary" id="xlsxBtn">엑셀로 저장</button>
         <button class="btn" id="docBtn">Word로 저장</button>
@@ -65,16 +76,36 @@
   </div>
   <div class="vfoot">
     <div id="vStatus" class="vstatus"></div>
-    <div class="vlegend2"><button class="lg ok" id="vOk"></button><button class="lg bad" id="vBad"></button></div>
+    <div class="vlegend2"><button class="lg ok" id="vOk"></button><button class="lg bad" id="vBad"></button><button class="lg zone" id="vZone"></button><button class="lg mark" id="vMark"></button><button class="lg style off" id="vStyle"></button></div>
     <div class="vhelp">두 손가락으로 확대·축소 · 두 번 탭하면 확대 · 옆으로 밀면 다음 사진</div>
   </div>
 </div>
 
 
+<div id="pick" hidden>
+  <div class="vhead"><button class="vclose" id="pkClose">닫기</button><b>선택 추출</b><button class="vclose pri" id="pkAdd">결과에 추가</button></div>
+  <div id="pkBody">
+    <div id="pkChips" class="pk-chips"></div>
+    <p class="pk-help">뽑고 싶은 글자 <b>위를 손가락으로 쓱 그어</b> 주세요. 그은 부분의 글자만 가져와요.</p>
+    <div id="pkStage"><div id="pkInner"><img id="pkImg" alt="" draggable="false"><canvas id="pkCv"></canvas></div></div>
+    <div class="pk-ctrl"><button class="lg" id="pkPrev">‹</button><span id="pkWho"></span><button class="lg" id="pkNext">›</button><button class="lg" id="pkClear">선 지우기</button></div>
+    <div class="seg" id="pkMode"><button class="segbtn active" data-pm="column">같은 열 모두 (모든 사진)</button><button class="segbtn" data-pm="cells">선택한 칸만</button></div>
+    <div id="pkResult"></div>
+  </div>
+</div>
+
+<div id="sheet" hidden>
+  <div class="sheet-card">
+    <div class="vhead"><b id="shTitle"></b><button class="vclose" id="shClose">닫기</button></div>
+    <div id="shBody"></div>
+    <button class="btn primary full" id="shAdd">결과에 추가</button>
+  </div>
+</div>
+
 <div id="cam" hidden>
-  <div id="camStage"><video id="camVideo" playsinline muted autoplay></video><canvas id="camOverlay"></canvas><div id="camFlash"></div></div>
+  <div id="camStage"><video id="camVideo" playsinline muted autoplay></video><canvas id="camOverlay"></canvas><div id="camFlash"></div><div id="camOk" class="camok" hidden>OK ✓</div></div>
   <div id="camStatus" class="camstatus"></div>
-  <div class="camlegend"><span class="g">■ 인식 가능</span><span class="r">■ 흐림 · 인식 어려움</span></div>
+  <div class="camchips"><span id="chipEdge" class="chip2">▢ 가장자리</span><span id="chipFocus" class="chip2">◎ 초점</span><span id="chipLight" class="chip2">☀ 밝기</span><span id="chipAngle" class="chip2">∠ 각도</span></div>
   <div class="camfoot"><button class="camside" id="camDone">완료</button><button id="camShot" class="camshot" aria-label="촬영"></button><div class="camcount" id="camCount"></div></div>
 </div>
 
@@ -87,10 +118,12 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="analyze.js"></script>
+<script src="styles.js"></script>
 <script src="imageproc.js"></script>
 <script src="app.js"></script>
 <script src="viewer.js"></script>
 <script src="camera.js"></script>
 <script src="editor.js"></script>
+<script src="tools.js"></script>
 </body>
 </html>

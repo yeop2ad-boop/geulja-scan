@@ -124,7 +124,7 @@ async function prepare(job) {
   if (light.note) notes.push(light.note);
   item.fix = notes;
   const t = fitCanvas(work, 320);
-  return { canvas: grayContrast(work, light.note ? 1.15 : 1.35), thumb: t.toDataURL('image/jpeg', 0.6), preview: await toBlob(fitCanvas(work, 1400), 0.8) };
+  return { color: work, canvas: grayContrast(work, light.note ? 1.15 : 1.35), thumb: t.toDataURL('image/jpeg', 0.6), preview: await toBlob(fitCanvas(work, 1400), 0.8) };
 }
 
 function addFiles(files) {
@@ -178,17 +178,35 @@ async function runQueue() {
       const job = jobs.shift(), item = job.item;
       curItem = item; item.status = 'run'; item.progress = 0.02; refresh();
       try {
-        const { canvas, thumb, preview } = await prepare(job);
+        const { canvas, thumb, preview, color } = await prepare(job);
         item.thumb = thumb; item.w = canvas.width; item.h = canvas.height;
         await putImg(item.id, preview); refresh();
         if (typeof Tesseract === 'undefined') throw new Error('글자 인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
         if (!worker) worker = await Tesseract.createWorker('kor+eng', 1, {
-          logger: m => { if (m.status === 'recognizing text' && curItem) { curItem.progress = 0.1 + m.progress * 0.85; refreshProgress(); } }
+          logger: m => { if (m.status === 'recognizing text' && curItem) { curItem.progress = Math.max(curItem.progress, 0.1 + m.progress * 0.85); refreshProgress(); } }
         });
         const { data } = await worker.recognize(canvas);
-        const { words, weak } = wordsFrom(data);
+        let { words, weak } = wordsFrom(data);
+        // 색이 있는 글자(빨강·파랑 등)는 색마다 그 색의 글자만 따로 읽어 정확도를 높이고, 글자 색 이름도 확정
+        try {
+          const colored = [];
+          for (const ck of GSImg.inkColors(color)) {
+            const r = await worker.recognize(GSImg.colorMask(color, ck.name));
+            wordsFrom(r.data).words.forEach(w => { w.cn = ck.name; colored.push(w); });
+          }
+          if (colored.length) {
+            const overlap = (a, b) => { const ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); return ix > 0 && iy > 0 && ix * iy > 0.4 * Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0)); };
+            words = [...words.filter(w => !colored.some(c => overlap(w, c))), ...colored];
+          }
+        } catch (e) { /* 색 분리 실패 시 기본 인식 결과 사용 */ }
         if (!words.length) throw new Error('글자를 찾지 못했어요');
-        const res = GSAnalyze.analyze(words);
+        const marks = GSImg.findMarks(canvas, words);
+        // 도장·무늬를 글자로 잘못 읽은 단어는 제거
+        const solid = marks.filter(m => m.kind === "mark" || m.kind === "graphic");
+        const clean = words.filter(w => !solid.some(m => { const ix = Math.min(w.x1, m.x1) - Math.max(w.x0, m.x0), iy = Math.min(w.y1, m.y1) - Math.max(w.y0, m.y0); return ix > 0 && iy > 0 && ix * iy > 0.5 * (w.x1 - w.x0) * (w.y1 - w.y0); }));
+        const res = GSAnalyze.analyze(clean.length ? clean : words, { marks });
+        item.zones = res.zones; item.marks = res.marks;
+        { const all = GSStyle.classify(clean.length ? clean : words, color), keep = all.filter(s => s.count >= 2); item.styles = keep.length ? keep : all; } // 낱글자 잡음 그룹은 제외
         item.weak = [...blurBoxes(canvas), ...weak].slice(0, 80);
         item.sections = res.sections; item.repeats = res.repeats; item.status = 'done';
       } catch (e) { item.status = 'error'; item.error = e.message || String(e); }
@@ -233,27 +251,35 @@ function samePattern(g, s) {
   }
   return fuzzy <= Math.ceil(s.headers.length / 2);
 }
-function mergeSections(items) {
+// 같은 패턴끼리 묶음(members: 어느 사진의 어느 구간인지 포함) — 합치기·선택 추출·합계 등이 함께 사용
+function groupSections(items) {
   const groups = [];
   items.filter(i => i.status === 'done').forEach(it => it.sections.forEach(s => {
     let g = groups.find(x => (s.type === 'text') === (x.type === 'text') && (s.type === 'text' || samePattern(x, s)));
-    if (!g) groups.push(g = { type: s.type === 'text' ? 'text' : 'table', headers: ['사진', ...s.headers], num: numCols(s), rows: [], photos: new Set(), kind: s.type, fuzzy: false });
+    if (!g) groups.push(g = { type: s.type === 'text' ? 'text' : 'table', headers: ['사진', ...s.headers], num: numCols(s), rows: [], photos: new Set(), kind: s.type, fuzzy: false, members: [] });
     else if (s.type !== 'text' && s.headers.some((h, c) => h !== g.headers[c + 1])) g.fuzzy = true;
     s.rows.forEach(r => g.rows.push([it.name, ...r]));
-    g.photos.add(it.name);
+    g.photos.add(it.name); g.members.push({ item: it, section: s });
   }));
   let n = 0;
-  return groups.sort((a, b) => (a.type === 'text') - (b.type === 'text') || b.rows.length - a.rows.length).map(g => ({
-    type: g.kind,
-    title: g.type === 'text' ? '일반 글자' : `패턴 ${++n}: ${g.headers.slice(1, 4).join('·')}`,
-    headers: g.headers, rows: g.rows,
-    note: g.type === 'text' ? `${g.photos.size}장의 반복 없는 글자` : `${g.photos.size}장에서 같은 패턴 발견 · 총 ${g.rows.length}줄${g.fuzzy ? ' · 비슷한 제목도 함께 묶었어요' : ''}`
-  }));
+  groups.sort((a, b) => (a.type === 'text') - (b.type === 'text') || b.rows.length - a.rows.length);
+  groups.forEach(g => { g.title = g.type === 'text' ? '일반 글자' : `패턴 ${++n}: ${g.headers.slice(1, 4).join('·')}`; });
+  return groups;
+}
+function mergeSections(items) {
+  return groupSections(items).map(g => {
+    let rows = g.rows;
+    if (cur && cur.dedupe) { const seen = new Set(); rows = rows.filter(r => { const k = r.slice(1).join('\u0001'); if (seen.has(k)) return false; seen.add(k); return true; }); }
+    return {
+      type: g.kind, title: g.title, headers: g.headers, rows,
+      note: g.type === 'text' ? `${g.photos.size}장의 반복 없는 글자` : `${g.photos.size}장에서 같은 패턴 발견 · 총 ${rows.length}줄${g.fuzzy ? ' · 비슷한 제목도 함께 묶었어요' : ''}${rows.length < g.rows.length ? ` · 중복 ${g.rows.length - rows.length}줄 제거` : ''}`
+    };
+  });
 }
 function perPhoto(items) {
   return items.filter(i => i.status === 'done').flatMap(it => it.sections.map(s => ({ ...s, photo: it.name, title: s.title })));
 }
-const exportSections = () => (mode === 'merged' ? mergeSections(cur.items) : perPhoto(cur.items).map(s => ({ ...s, title: `${s.photo} ${s.title}` })));
+const exportSections = () => [...(mode === 'merged' ? mergeSections(cur.items) : perPhoto(cur.items).map(s => ({ ...s, title: `${s.photo} ${s.title}` }))), ...(cur.extras || [])];
 
 // ---------- 렌더 ----------
 const STATUS = { wait: '대기 중', run: '글자 읽는 중…', done: '완료', error: '실패' };

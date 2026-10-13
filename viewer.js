@@ -80,10 +80,17 @@
   function overlays(it) {
     if (!it.w) return '';
     const pos = b => `left:${b.x0 / it.w * 100}%;top:${b.y0 / it.h * 100}%;width:${(b.x1 - b.x0) / it.w * 100}%;height:${(b.y1 - b.y0) / it.h * 100}%`;
-    const ok = (it.sections || []).filter(s => s.box && s.type !== 'text').map(s => `<div class="vb ok" style="${pos(s.box)}"><i>✓</i></div>`);
+    const ok = patternBoxes(it).map((b, n) => `<div class="vb ok" style="${pos(b)}"><i>✓</i></div>`);
     const bad = (it.weak || []).map(b => `<div class="vb bad" style="${pos({ x0: b.x0 - 3, y0: b.y0 - 3, x1: b.x1 + 3, y1: b.y1 + 3 })}"></div>`);
-    return ok.join('') + bad.join('');
+    const pad = (b, p) => ({ x0: b.x0 - p, y0: b.y0 - p, x1: b.x1 + p, y1: b.y1 + p });
+    const zone = (it.zones || []).map(z => `<div class="vb zone${z.group ? ' rep' : ''}" style="${pos(pad(z.box, 8))}"><em>${z.name}</em></div>`);
+    const mark = (it.marks || []).map(m => `<div class="vb mark" style="${pos(m)}"><em>${MARK_NAME[m.kind] || '표식'}${m.corner ? ' · 구석' : ''}</em></div>`);
+    const style = (it.styles || []).flatMap(st => st.boxes.map(b => `<div class="vb style" style="${pos(pad(b, 3))};border-color:${st.hex}"><em style="background:${st.hex}">${st.name}</em></div>`));
+    return zone.join('') + mark.join('') + style.join('') + ok.join('') + bad.join('');
   }
+  const MARK_NAME = { 'rule-h': '가로선', 'rule-v': '세로선', grid: '표 테두리', graphic: '그림·로고', mark: '무늬' };
+  // 패턴으로 인식한 구간의 위치 (반복 구역은 블록마다)
+  const patternBoxes = it => (it.sections || []).filter(s => s.type !== 'text').flatMap(s => (s.boxes || (s.box ? [s.box] : [])));
   async function go(i) {
     if (i < 0 || i >= list.length) return;
     idx = i; S = 1; TX = TY = 0; apply();
@@ -93,7 +100,10 @@
     url = blob ? URL.createObjectURL(blob) : it.thumb;
     img.src = url;
     layer.innerHTML = overlays(it);
-    const nOk = (it.sections || []).filter(s => s.box && s.type !== 'text').length, nBad = (it.weak || []).length;
+    const nOk = patternBoxes(it).length, nBad = (it.weak || []).length;
+    $('#vZone').textContent = `구역 ${(it.zones || []).length}`;
+    $('#vMark').textContent = `표식 ${(it.marks || []).length}`;
+    $('#vStyle').textContent = `글자 스타일 ${(it.styles || []).length}`;
     $('#vTitle').textContent = it.name;
     $('#vCount').textContent = `${i + 1} / ${list.length}`;
     $('#vOk').textContent = `✓ 인식한 패턴 ${nOk}`;
@@ -114,6 +124,10 @@
   $('#vPrev').onclick = () => go(idx - 1); $('#vNext').onclick = () => go(idx + 1);
   $('#vOk').onclick = e => { const off = layer.classList.toggle('hide-ok'); e.currentTarget.classList.toggle('off', off); };
   $('#vBad').onclick = e => { const off = layer.classList.toggle('hide-bad'); e.currentTarget.classList.toggle('off', off); };
+  $('#vZone').onclick = e => { const off = layer.classList.toggle('hide-zone'); e.currentTarget.classList.toggle('off', off); };
+  layer.classList.add('hide-style'); // 글자 스타일 표시는 기본으로 꺼 둠(필요할 때 켜기)
+  $('#vStyle').onclick = e => { const off = layer.classList.toggle('hide-style'); e.currentTarget.classList.toggle('off', off); };
+  $('#vMark').onclick = e => { const off = layer.classList.toggle('hide-mark'); e.currentTarget.classList.toggle('off', off); };
   document.addEventListener('keydown', e => {
     if ($('#viewer').hidden) return;
     if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight') go(idx + 1); else if (e.key === 'ArrowLeft') go(idx - 1);

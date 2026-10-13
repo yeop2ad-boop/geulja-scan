@@ -222,5 +222,79 @@
     return res;
   }
 
-  root.GSImg = { estimateSkew, rotate, warp, detectPaper, needsWarp, normalizeLight, tileAnalyze, mk };
+  // ---------- 6) 글자가 아닌 모양 찾기 (선·표 테두리·로고/그림·구석 표식) ----------
+  // words: OCR 단어 박스(글자 위치). 반환 좌표는 src 픽셀 기준.
+  // kind: rule-h(가로선) rule-v(세로선) grid(표 테두리) graphic(큰 그림·로고) mark(작은 무늬·표식)
+  function findMarks(src, words) {
+    const { c, g, k } = scaled(src, 600), w = c.width, h = c.height, a = grayArr(c, g);
+    const th = Math.min(otsu(a), 120);
+    const wm = new Uint8Array(w * h);
+    for (const b of words) {
+      const x0 = Math.max(0, Math.floor(b.x0 * k) - 1), x1 = Math.min(w - 1, Math.ceil(b.x1 * k) + 1), y0 = Math.max(0, Math.floor(b.y0 * k) - 1), y1 = Math.min(h - 1, Math.ceil(b.y1 * k) + 1);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) wm[y * w + x] = 1;
+    }
+    const lab = new Uint8Array(w * h), stack = new Int32Array(w * h), out = [];
+    for (let s = 0; s < a.length; s++) {
+      if (lab[s] || a[s] >= th) continue;
+      let sp = 0, area = 0, inW = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+      stack[sp++] = s; lab[s] = 1;
+      while (sp) {
+        const i = stack[--sp], x = i % w, y = (i / w) | 0; area++; if (wm[i]) inW++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const j = ny * w + nx; if (!lab[j] && a[j] < th) { lab[j] = 1; stack[sp++] = j; }
+        }
+      }
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1, fill = area / (bw * bh);
+      if ((inW / area > 0.4 && !(fill > 0.65 && bw >= 8 && bh >= 8)) || area < 14 || Math.max(bw, bh) < 5) continue; // 글자이거나 잡티
+      if (bw > w * 0.9 && bh > h * 0.9 && fill >= 0.5) continue; // 어두운 배경 덩어리
+      let kind;
+      if (bw >= bh * 10 && bw >= w * 0.12) kind = 'rule-h';
+      else if (bh >= bw * 10 && bh >= h * 0.12) kind = 'rule-v';
+      else if (bw * bh >= w * h * 0.12 && fill < 0.2) kind = 'grid';
+      else if (bw * bh >= w * h * 0.05) kind = 'graphic';
+      else if (bw * bh >= 150) kind = 'mark';
+      else continue;
+      const cx = (x0 + x1) / 2 / w, cy = (y0 + y1) / 2 / h;
+      out.push({ x0: x0 / k, y0: y0 / k, x1: (x1 + 1) / k, y1: (y1 + 1) / k, kind, corner: (cx < 0.14 || cx > 0.86) && (cy < 0.14 || cy > 0.86), area });
+    }
+    return out.sort((p, q) => q.area - p.area).slice(0, 60).map(({ area, ...m }) => m);
+  }
+
+  // ---------- 7) 글자 색으로 따로 읽기 ----------
+  // 색이 있는 글자는 흑백으로 바꾸면 대비가 약해져 인식이 거칠어지므로, 색마다 그 색의 글자만 떼어 읽는다.
+  const hueClass = h => (h < 15 || h >= 345 ? '빨강' : h < 40 ? '주황' : h < 70 ? '노랑' : h < 170 ? '초록' : h < 200 ? '청록' : h < 260 ? '파랑' : h < 300 ? '보라' : '분홍');
+  // 픽셀이 "뚜렷한 색 글자"이면 색 이름, 아니면 null (밝은 종이·검정·회색은 제외)
+  function pixelColor(r, g, b) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx < 64 || mx - mn < 0.28 * mx || (r + g + b) / 3 > 215) return null;
+    const d = mx - mn; let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360;
+    return hueClass(h);
+  }
+  // 반환: [{name, count}] — 많이 쓰인 색 순 (종이가 어두우면 빈 목록)
+  function inkColors(src) {
+    const { c, g } = scaled(src, 800), d = g.getImageData(0, 0, c.width, c.height).data, cnt = {};
+    let lum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { lum += d[i] + d[i + 1] + d[i + 2]; n++; const k = pixelColor(d[i], d[i + 1], d[i + 2]); if (k) cnt[k] = (cnt[k] || 0) + 1; }
+    if (lum / n / 3 < 140) return []; // 어두운 배경은 건너뜀
+    return Object.entries(cnt).filter(([, v]) => v >= Math.max(60, n * 0.0006)).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, count]) => ({ name, count }));
+  }
+  // 그 색의 글자만 검게, 나머지는 흰색으로 만든 사진 (글자인식용)
+  function colorMask(src, name) {
+    const W = src.width, H = src.height, g = src.getContext('2d', { willReadFrequently: true }), id = g.getImageData(0, 0, W, H), d = id.data;
+    const m = new Uint8Array(W * H);
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) if (pixelColor(d[i], d[i + 1], d[i + 2]) === name) m[p] = 1;
+    // 가장자리가 옅게 번지는 글자도 이어지도록 1픽셀 두껍게
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x; let on = m[p];
+      if (!on) { for (let dy = -1; dy <= 1 && !on; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && m[yy * W + xx] === 1) { on = 2; break; } } }
+      const v = on ? 0 : 255, i = p * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+    }
+    const out = mk(W, H); out.getContext('2d').putImageData(id, 0, 0);
+    return out;
+  }
+
+  root.GSImg = { estimateSkew, rotate, warp, detectPaper, needsWarp, normalizeLight, tileAnalyze, findMarks, inkColors, colorMask, mk };
 })(window);
