@@ -152,7 +152,7 @@
     const bm = bg.reduce((s, v) => s + v, 0) / bg.length, lo = pct(bg, 0.05), hi = pct(bg, 0.95);
     const rg = pct(small, 0.98) - pct(small, 0.02);
     const uneven = hi / Math.max(lo, 1) > 1.35;
-    if (bm > 95 && bm < 242 && !uneven && rg > 110) return { canvas: src, note: '' };
+    if (bm > 95 && !uneven && rg > 110 && !(bm >= 242 && rg < 150)) return { canvas: src, note: '' };
     const note = bm <= 95 ? '어두운 사진을 밝게 보정했어요' : bm >= 242 ? '너무 밝은 사진을 보정했어요' : uneven ? '그림자·조명 차이를 보정했어요' : '대비를 보정했어요';
     // 배경 지도를 원본 크기로 확대
     const bc = mk(sw, sh), bgx = bc.getContext('2d'), bd = bgx.createImageData(sw, sh);
