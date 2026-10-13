@@ -99,6 +99,7 @@
     $('#vOk').textContent = `✓ 인식한 패턴 ${nOk}`;
     $('#vBad').textContent = `인식 어려움 ${nBad}`;
     $('#vPrev').disabled = i === 0; $('#vNext').disabled = i === list.length - 1;
+    $('#vFixNote').textContent = (it.fix && it.fix.length) ? '✨ ' + it.fix.join(' · ') : '';
     $('#vStatus').textContent = it.status === 'done' ? '' : (it.status === 'error' ? '인식에 실패한 사진이에요' : '아직 글자를 읽는 중이에요');
   }
   window.openViewer = id => {
@@ -109,6 +110,7 @@
   };
   const close = () => { $('#viewer').hidden = true; document.body.style.overflow = ''; };
   $('#vClose').onclick = close;
+  $('#vFix').onclick = () => window.openEditor && window.openEditor(list[idx]);
   $('#vPrev').onclick = () => go(idx - 1); $('#vNext').onclick = () => go(idx + 1);
   $('#vOk').onclick = e => { const off = layer.classList.toggle('hide-ok'); e.currentTarget.classList.toggle('off', off); };
   $('#vBad').onclick = e => { const off = layer.classList.toggle('hide-bad'); e.currentTarget.classList.toggle('off', off); };

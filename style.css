@@ -124,3 +124,41 @@ td:focus,th:focus{background:var(--pl);border-radius:8px}
 .lg.bad{background:rgba(239,68,68,.55)}
 .lg.off{background:rgba(255,255,255,.14);color:#aaa;text-decoration:line-through}
 .vhelp{color:#777;font-size:12px}
+/* 보정 표시 */
+.gfix{position:absolute;left:6px;top:6px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff}
+.vbtns{display:flex;gap:8px}
+.vfixnote{padding:0 18px 6px;font-size:12px;color:#a5b4fc;min-height:0}
+.vfixnote:empty{display:none}
+/* 실시간 카메라 */
+#cam{position:fixed;inset:0;z-index:30;background:#000;color:#fff;display:flex;flex-direction:column}
+#camStage{position:relative;flex:1;overflow:hidden}
+#camVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#camOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .15s}
+#camFlash.on{opacity:.7;transition:none}
+.camstatus{text-align:center;font-weight:800;font-size:15px;padding:12px 16px;background:#111}
+.camstatus.ok{background:#15803d}
+.camstatus.bad{background:#b91c1c}
+.camlegend{display:flex;justify-content:center;gap:16px;font-size:12px;padding:8px;background:#111;color:#aaa}
+.camlegend .g{color:#4ade80}.camlegend .r{color:#f87171}
+.camfoot{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 20px calc(18px + env(safe-area-inset-bottom));background:#111}
+.camside{justify-self:start;border:0;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:15px;padding:10px 18px;border-radius:999px;cursor:pointer}
+.camcount{justify-self:end;font-size:13px;color:#aaa}
+.camshot{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:0 0 0 4px transparent;cursor:pointer;padding:0;transition:box-shadow .15s,background .15s}
+.camshot:active{transform:scale(.94)}
+.camshot.ok{box-shadow:0 0 0 5px #22c55e}
+.camshot.bad{box-shadow:0 0 0 5px #ef4444}
+/* 보정(모서리) 화면 */
+#editor{position:fixed;inset:0;z-index:25;background:#000;color:#fff;display:flex;flex-direction:column}
+#editor .vhead{gap:8px}
+.vclose.pri{background:#fff;color:#000}
+#edStage{position:relative;flex:1;overflow:hidden;display:grid;place-items:center;touch-action:none}
+#edBox{position:relative}
+#edImg{width:100%;height:100%;display:block;pointer-events:none;user-select:none}
+#edSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#edPoly{fill:rgba(34,197,94,.18);stroke:#22c55e;stroke-width:.5;vector-effect:non-scaling-stroke}
+#edSvg polygon{stroke-width:2}
+.edh{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(34,197,94,.25);border:3px solid #22c55e;touch-action:none;cursor:grab;box-sizing:border-box}
+.edh::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fff}
+.edh.drag{background:rgba(34,197,94,.5);transform:scale(1.15)}
+.lg{background:rgba(255,255,255,.16)}

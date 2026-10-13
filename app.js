@@ -61,32 +61,70 @@ function newProject() {
 }
 
 // ---------- 사진 추가 + 일괄 처리 ----------
-function loadImage(file) {
+const SRC = id => 'src:' + id; // IndexedDB: 보정 전 원본(2200px)
+
+// 파일/Blob → 색상 캔버스(긴 변 2200px 이하)
+function decodeFile(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file), img = new Image();
-    img.onload = async () => {
+    img.onload = () => {
       const k = Math.min(1, 2200 / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      const g = c.getContext('2d');
-      g.filter = 'grayscale(1) contrast(1.35)';
-      g.drawImage(img, 0, 0, c.width, c.height);
-      // 썸네일
-      const t = document.createElement('canvas'), tk = 320 / Math.max(img.width, img.height);
-      t.width = Math.max(1, Math.round(img.width * tk)); t.height = Math.max(1, Math.round(img.height * tk));
-      t.getContext('2d').drawImage(img, 0, 0, t.width, t.height);
-      // 확인 화면용 미리보기(원본 색상, 900px)
-      const pk = Math.min(1, 1400 / Math.max(img.width, img.height));
-      const pv = document.createElement('canvas');
-      pv.width = Math.round(img.width * pk); pv.height = Math.round(img.height * pk);
-      pv.getContext('2d').drawImage(img, 0, 0, pv.width, pv.height);
-      const preview = await new Promise(r => pv.toBlob(r, 'image/jpeg', 0.8));
-      URL.revokeObjectURL(url);
-      resolve({ canvas: c, thumb: t.toDataURL('image/jpeg', 0.6), preview });
+      const c = GSImg.mk(img.width * k, img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c);
     };
     img.onerror = () => reject(new Error('사진을 열 수 없어요'));
     img.src = url;
   });
+}
+const toBlob = (c, q) => new Promise(r => c.toBlob(r, 'image/jpeg', q));
+function fitCanvas(src, max) {
+  const k = Math.min(1, max / Math.max(src.width, src.height)), c = GSImg.mk(src.width * k, src.height * k);
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); return c;
+}
+// 흑백+대비 (ctx.filter는 일부 브라우저에서 미지원이라 픽셀로 직접 처리)
+function grayContrast(src, contrast) {
+  const c = GSImg.mk(src.width, src.height), g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(src, 0, 0);
+  const id = g.getImageData(0, 0, c.width, c.height), d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = Math.max(0, Math.min(255, ((77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) / 256 - 128) * contrast + 128));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  g.putImageData(id, 0, 0); return c;
+}
+
+// 보정 파이프라인: 종이 펴기(원근) → 기울기 → 조명 → 글자인식용 흑백
+async function prepare(job) {
+  const item = job.item;
+  let src;
+  if (job.file) {
+    src = await decodeFile(job.file);
+    await putImg(SRC(item.id), await toBlob(src, 0.9));
+    item.sw = src.width; item.sh = src.height;
+  } else {
+    const b = await getImg(SRC(item.id));
+    if (!b) throw new Error('원본 사진을 찾을 수 없어요. 다시 추가해 주세요.');
+    src = await decodeFile(b); item.sw = src.width; item.sh = src.height;
+  }
+  const notes = [];
+  let corners = job.corners, auto = false;
+  if (corners === undefined) {
+    const q = GSImg.detectPaper(src);
+    if (q && GSImg.needsWarp(q, src.width, src.height)) { corners = q.map(p => ({ x: p.x / src.width, y: p.y / src.height })); auto = true; }
+  }
+  let work = src;
+  if (Array.isArray(corners)) {
+    work = GSImg.warp(src, corners.map(p => ({ x: p.x * src.width, y: p.y * src.height })));
+    notes.push(auto ? '종이를 자동으로 반듯하게 폈어요' : '직접 맞춘 모서리로 폈어요'); item.corners = corners;
+  } else item.corners = corners === 'none' ? 'none' : null;
+  const skew = GSImg.estimateSkew(work);
+  if (Math.abs(skew) >= 0.4) { work = GSImg.rotate(work, -skew); notes.push(`기울기 ${Math.abs(skew)}° 보정`); }
+  const light = GSImg.normalizeLight(work); work = light.canvas;
+  if (light.note) notes.push(light.note);
+  item.fix = notes;
+  const t = fitCanvas(work, 320);
+  return { canvas: grayContrast(work, light.note ? 1.15 : 1.35), thumb: t.toDataURL('image/jpeg', 0.6), preview: await toBlob(fitCanvas(work, 1400), 0.8) };
 }
 
 function addFiles(files) {
@@ -97,6 +135,13 @@ function addFiles(files) {
     proj.items.push(item);
     jobs.push({ proj, item, file: f });
   });
+  save(); renderProject(); runQueue();
+}
+// 보정 화면에서 모서리를 바꿔 다시 처리 (corners: 정규화 좌표 4개 | 'none' | undefined=자동)
+function reprocess(item, corners) {
+  if (!cur) return;
+  Object.assign(item, { status: 'wait', progress: 0, sections: [], weak: [], error: '' });
+  jobs.push({ proj: cur, item, corners });
   save(); renderProject(); runQueue();
 }
 
@@ -121,43 +166,7 @@ function wordsFrom(data) {
 // 인식 신뢰도만으로는 "아예 못 읽은" 흐린 부분을 놓치므로 이미지에서 직접 찾는다.
 function blurBoxes(canvas) {
   const w = canvas.width, h = canvas.height;
-  const px = canvas.getContext('2d').getImageData(0, 0, w, h).data;
-  const T = Math.max(12, Math.round(Math.max(w, h) / 55));
-  const gx = Math.ceil(w / T), gy = Math.ceil(h / T);
-  const rng = new Float32Array(gx * gy), grad = new Float32Array(gx * gy);
-  for (let ty = 0; ty < gy; ty++) for (let tx = 0; tx < gx; tx++) {
-    let mn = 255, mx = 0, g = 0;
-    const x1 = Math.min(w - 1, (tx + 1) * T), y1 = Math.min(h - 1, (ty + 1) * T);
-    for (let y = ty * T; y < y1; y++) for (let x = tx * T; x < x1; x++) {
-      const v = px[(y * w + x) * 4];
-      if (v < mn) mn = v; if (v > mx) mx = v;
-      const dx = Math.abs(v - px[(y * w + x + 1) * 4]), dy = Math.abs(v - px[((y + 1) * w + x) * 4]);
-      if (dx > g) g = dx; if (dy > g) g = dy;
-    }
-    rng[ty * gx + tx] = mx - mn; grad[ty * gx + tx] = g;
-  }
-  const ink = [...grad.keys()].filter(i => rng[i] > 80);
-  if (ink.length < 4) return [];
-  const sorted = ink.map(i => grad[i]).sort((a, b) => a - b);
-  const med = sorted[Math.floor(sorted.length / 2)];
-  const flag = new Uint8Array(gx * gy);
-  ink.forEach(i => { if (grad[i] < med * 0.45 || grad[i] < 55) flag[i] = 1; });
-  // 이웃한 칸 묶기
-  const seen = new Uint8Array(gx * gy), out = [];
-  for (let s = 0; s < flag.length; s++) {
-    if (!flag[s] || seen[s]) continue;
-    const st = [s]; seen[s] = 1; let x0 = gx, y0 = gy, x1 = 0, y1 = 0, n = 0;
-    while (st.length) {
-      const i = st.pop(), x = i % gx, y = (i / gx) | 0; n++;
-      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= gx || ny >= gy) continue;
-        const j = ny * gx + nx; if (flag[j] && !seen[j]) { seen[j] = 1; st.push(j); }
-      }
-    }
-    if (n >= 2) out.push({ x0: x0 * T, y0: y0 * T, x1: Math.min(w, (x1 + 1) * T), y1: Math.min(h, (y1 + 1) * T) });
-  }
-  return out;
+  return GSImg.tileAnalyze(canvas.getContext('2d').getImageData(0, 0, w, h).data, w, h).bad;
 }
 
 async function runQueue() {
@@ -169,9 +178,9 @@ async function runQueue() {
       const job = jobs.shift(), item = job.item;
       curItem = item; item.status = 'run'; item.progress = 0.02; refresh();
       try {
-        const { canvas, thumb, preview } = await loadImage(job.file);
+        const { canvas, thumb, preview } = await prepare(job);
         item.thumb = thumb; item.w = canvas.width; item.h = canvas.height;
-        putImg(item.id, preview); refresh();
+        await putImg(item.id, preview); refresh();
         if (typeof Tesseract === 'undefined') throw new Error('글자 인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
         if (!worker) worker = await Tesseract.createWorker('kor+eng', 1, {
           logger: m => { if (m.status === 'recognizing text' && curItem) { curItem.progress = 0.1 + m.progress * 0.85; refreshProgress(); } }
@@ -190,6 +199,7 @@ async function runQueue() {
     running = false; refresh();
   }
 }
+
 function refresh() { if (cur) renderProject(); }
 function refreshProgress() {
   const el = document.querySelector('.item.run .fill');
@@ -257,6 +267,7 @@ function renderProject() {
         <button class="gdel" data-delitem="${it.id}" title="사진 삭제">✕</button>
         ${it.status === 'done' ? `<span class="gbadge ok">✓ 구간 ${it.sections.length}</span>` : ''}
         ${it.status === 'error' ? `<span class="gbadge bad">실패</span>` : ''}
+        ${it.fix && it.fix.length && it.status === "done" ? `<span class="gfix">✨ 보정됨</span>` : ""}
         ${it.status === 'run' || it.status === 'wait' ? `<div class="gscan"><span>${it.status === 'run' ? '읽는 중' : '대기 중'}</span>${it.status === 'run' ? `<div class="bar"><div class="fill" style="width:${Math.round(it.progress * 100)}%"></div></div>` : ''}</div>` : ''}
       </div>
       <input class="iname" data-iname="${it.id}" value="${esc(it.name)}">
@@ -314,7 +325,7 @@ document.addEventListener('click', e => {
   const t = e.target, d = t.dataset;
   if (d.del != null) { cur.items.find(i => i.id === d.i).sections.splice(+d.del, 1); save(); renderProject(); }
   if (d.view) openViewer(d.view);
-  if (d.delitem) { delImg(d.delitem); cur.items =cur.items.filter(i => i.id !== d.delitem); for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].item.id === d.delitem) jobs.splice(k, 1); save(); renderProject(); }
+  if (d.delitem) { delImg(d.delitem); delImg(SRC(d.delitem)); cur.items =cur.items.filter(i => i.id !== d.delitem); for (let k = jobs.length - 1; k >= 0; k--) if (jobs[k].item.id === d.delitem) jobs.splice(k, 1); save(); renderProject(); }
   if (d.mode) { mode = d.mode; renderProject(); }
   const card = t.closest('[data-open]'); if (card) openProject(card.dataset.open);
 });
@@ -322,7 +333,7 @@ $('#newProjBtn').onclick = newProject;
 $('#backBtn').onclick = () => { save(); showHome(); };
 $('#delProjBtn').onclick = () => {
   if (!confirm(`'${cur.name}' 프로젝트를 삭제할까요? 정리 결과가 모두 사라져요.`)) return;
-  cur.items.forEach(i => delImg(i.id));
+  cur.items.forEach(i => { delImg(i.id); delImg(SRC(i.id)); });
   jobs.splice(0, jobs.length, ...jobs.filter(j => j.proj !== cur));
   projects = projects.filter(p => p !== cur); save(); showHome();
 };

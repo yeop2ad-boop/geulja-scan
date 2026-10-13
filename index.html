@@ -31,9 +31,8 @@
       <button class="x" id="delProjBtn" title="프로젝트 삭제">삭제</button>
     </div>
     <div class="add-btns">
-      <label class="btn primary">촬영하기
-        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-      </label>
+      <button class="btn primary" id="camBtn">촬영하기</button>
+      <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
       <label class="btn">앨범에서 여러 장
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
       </label>
@@ -58,7 +57,8 @@
 </main>
 
 <div id="viewer" hidden>
-  <div class="vhead"><div><b id="vTitle"></b> <span id="vCount"></span></div><button class="vclose" id="vClose">닫기</button></div>
+  <div class="vhead"><div><b id="vTitle"></b> <span id="vCount"></span></div><div class="vbtns"><button class="vclose" id="vFix">보정</button><button class="vclose" id="vClose">닫기</button></div></div>
+  <div id="vFixNote" class="vfixnote"></div>
   <div id="vstage">
     <div id="vimg"><img id="vphoto" alt="" draggable="false"><div id="vlayer"></div></div>
     <button class="vnav l" id="vPrev" aria-label="이전">‹</button><button class="vnav r" id="vNext" aria-label="다음">›</button>
@@ -71,10 +71,26 @@
 </div>
 
 
+<div id="cam" hidden>
+  <div id="camStage"><video id="camVideo" playsinline muted autoplay></video><canvas id="camOverlay"></canvas><div id="camFlash"></div></div>
+  <div id="camStatus" class="camstatus"></div>
+  <div class="camlegend"><span class="g">■ 인식 가능</span><span class="r">■ 흐림 · 인식 어려움</span></div>
+  <div class="camfoot"><button class="camside" id="camDone">완료</button><button id="camShot" class="camshot" aria-label="촬영"></button><div class="camcount" id="camCount"></div></div>
+</div>
+
+<div id="editor" hidden>
+  <div class="vhead"><button class="vclose" id="edCancel">취소</button><b>사진 보정</b><button class="vclose pri" id="edApply">적용</button></div>
+  <div id="edStage"><div id="edBox"><img id="edImg" alt="" draggable="false"><svg id="edSvg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon id="edPoly"/></svg><div class="edh"></div><div class="edh"></div><div class="edh"></div><div class="edh"></div></div></div>
+  <div class="vfoot"><div class="vhelp">네 모서리를 끌어 종이 가장자리에 맞추면 반듯하게 펴 드려요</div><div class="vlegend2"><button class="lg" id="edAuto">자동 감지</button><button class="lg" id="edReset">초기화</button><button class="lg" id="edNone">보정 없이</button></div></div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="analyze.js"></script>
+<script src="imageproc.js"></script>
 <script src="app.js"></script>
 <script src="viewer.js"></script>
+<script src="camera.js"></script>
+<script src="editor.js"></script>
 </body>
 </html>
