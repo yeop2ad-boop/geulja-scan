@@ -4,3 +4,4 @@
 *.keystore
 *.jks
 signing-key-info.txt
+.claude/
