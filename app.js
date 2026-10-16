@@ -59,6 +59,53 @@
     try { await track.applyConstraints({ advanced: [{ zoom: steps[zoomIdx] }] }); e.currentTarget.textContent = Math.round(steps[zoomIdx] / z.min) + '×'; } catch { /* 무시 */ }
   };
 
+  /* ---------------- 탭 초점 (갤럭시 카메라 방식) ---------------- */
+  // 화면을 톡 누르면 그 지점에 노란 초점 상자가 뜨고 초점을 맞춤 · 상자 옆 해 모양을 끌면 밝기 조절 · 길게 누르면 초점·밝기 잠금
+  const fbox = $('#fbox'), fexp = $('#fexp'), fthumb = fexp.querySelector('i');
+  let fTimer = null, locked = false, evVal = 0, down = null;
+  function placeThumb() { const er = caps.exposureCompensation; if (!er || er.max <= er.min) return; fthumb.style.top = (1 - (evVal - er.min) / (er.max - er.min)) * 100 + '%'; }
+  function keepBox(ms) { clearTimeout(fTimer); if (ms) fTimer = setTimeout(() => { fbox.classList.add('fade'); setTimeout(() => { if (fbox.classList.contains('fade')) fbox.hidden = true; }, 380); }, ms); }
+  function showBox(x, y, lock) {
+    fbox.hidden = false; fbox.classList.remove('fade'); fbox.classList.toggle('locked', !!lock);
+    fbox.style.left = x + 'px'; fbox.style.top = y + 'px';
+    fbox.style.animation = 'none'; void fbox.offsetWidth; fbox.style.animation = '';
+    const er = caps.exposureCompensation; fexp.hidden = !(er && er.max > er.min);
+    const nearRight = x > cam.clientWidth - 120; fexp.style.left = nearRight ? 'auto' : 'calc(100% + 14px)'; fexp.style.right = nearRight ? 'calc(100% + 14px)' : 'auto';
+    placeThumb(); keepBox(lock ? 0 : 2200);
+  }
+  // 누른 곳(화면 좌표) → 영상 속 비율 좌표로 바꿔 그 지점에 초점
+  async function focusAt(cx, cy, lock) {
+    const vw = video.videoWidth, vh = video.videoHeight; locked = !!lock;
+    if (!track || !vw) return;
+    const cw = cam.clientWidth, ch = cam.clientHeight, s = Math.max(cw / vw, ch / vh), ox = (cw - vw * s) / 2, oy = (ch - vh * s) / 2;
+    const nx = Math.min(1, Math.max(0, (cx - ox) / s / vw)), ny = Math.min(1, Math.max(0, (cy - oy) / s / vh)), fm = caps.focusMode || [];
+    const adv = { pointsOfInterest: [{ x: nx, y: ny }] };
+    if (fm.includes('single-shot')) adv.focusMode = 'single-shot'; else if (fm.includes('continuous')) adv.focusMode = 'continuous';
+    try { await track.applyConstraints({ advanced: [adv] }); }
+    catch { try { if (fm.length) await track.applyConstraints({ advanced: [{ focusMode: fm.includes('continuous') ? 'continuous' : fm[0] }] }); } catch { /* 이 기기는 초점 지정 미지원 */ } }
+    // 잠그지 않았다면, 맞춘 뒤에는 그 지점을 기준으로 계속 초점을 따라가게 함
+    if (!lock && fm.includes('continuous')) setTimeout(() => { if (!locked && track) track.applyConstraints({ advanced: [{ focusMode: 'continuous', pointsOfInterest: [{ x: nx, y: ny }] }] }).catch(() => {}); }, 900);
+  }
+  cam.addEventListener('pointerdown', e => {
+    if (e.target.closest('.grip, button, label, #fexp, #nocam')) return;
+    const r = cam.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top, moved: false, fired: false };
+    down.timer = setTimeout(() => { if (down && !down.moved) { down.fired = true; showBox(down.x, down.y, true); focusAt(down.x, down.y, true); if (navigator.vibrate) navigator.vibrate(20); } }, 550);
+  });
+  cam.addEventListener('pointermove', e => { if (!down) return; const r = cam.getBoundingClientRect(); if (Math.hypot(e.clientX - r.left - down.x, e.clientY - r.top - down.y) > 10) { down.moved = true; clearTimeout(down.timer); } });
+  cam.addEventListener('pointerup', () => { if (!down) return; clearTimeout(down.timer); const d = down; down = null; if (d.moved || d.fired) return; showBox(d.x, d.y, false); focusAt(d.x, d.y, false); });
+  cam.addEventListener('pointercancel', () => { if (down) { clearTimeout(down.timer); down = null; } });
+  // 밝기(노출) 슬라이더
+  function setEv(e) {
+    const er = caps.exposureCompensation; if (!er) return;
+    const r = fexp.getBoundingClientRect(), t = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    evVal = er.min + (1 - t) * (er.max - er.min); if (er.step) evVal = Math.round(evVal / er.step) * er.step;
+    placeThumb(); if (track) track.applyConstraints({ advanced: [{ exposureCompensation: evVal }] }).catch(() => {});
+  }
+  fexp.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fexp.setPointerCapture(e.pointerId); fexp._d = true; keepBox(0); setEv(e); });
+  fexp.addEventListener('pointermove', e => { if (fexp._d) setEv(e); });
+  const endEv = () => { if (fexp._d) { fexp._d = false; if (!fbox.classList.contains('locked')) keepBox(2200); } };
+  fexp.addEventListener('pointerup', endEv); fexp.addEventListener('pointercancel', endEv);
+
   /* ---------------- 글자 인식 엔진 ---------------- */
   let worker = null, engWorker = null, ready = false;
   const readyP = (async () => {
@@ -337,5 +384,5 @@
   layoutBand(); renderMemo(); setMode(st.mode); syncOpts();
   startCam();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && location.hostname !== 'localhost') navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.__reader = { st, prepLine, recognize, grab, shoot, commit, finalize, raw: async c => { await readyP; return worker.recognize(c); } }; // 점검용
+  window.__reader = { setCam: (t, c) => { track = t; caps = c; }, st, prepLine, recognize, grab, shoot, commit, finalize, raw: async c => { await readyP; return worker.recognize(c); } }; // 점검용
 })();
