@@ -1,2 +1,6 @@
-.claude/
 로고시안/
+스토어등록/
+안드로이드패키지/
+*.keystore
+*.jks
+signing-key-info.txt
