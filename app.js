@@ -10,7 +10,7 @@
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
 
   const video = $('#video'), cam = $('#cam'), band = $('#band');
-  let stream = null, track = null, caps = {}, zoomIdx = 0, torchOn = false;
+  let stream = null, track = null, caps = {}, torchOn = false, zoom = 1, dz = 1, evVal = 0;
 
   /* ---------------- 띠(읽는 구간) ---------------- */
   function layoutBand() {
@@ -45,24 +45,48 @@
     video.srcObject = stream; await video.play().catch(() => {});
     track = stream.getVideoTracks()[0]; caps = (track.getCapabilities && track.getCapabilities()) || {};
     try { if (caps.focusMode && caps.focusMode.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch { /* 일부 기기 미지원 */ }
-    $('#torch').hidden = !caps.torch;
-    const zr = caps.zoom; $('#zoomBtn').hidden = !(zr && zr.max > zr.min + 0.5);
+    const er0 = caps.exposureCompensation;
+    $('#torch').hidden = !(caps.torch || (er0 && er0.max > er0.min)); // 플래시 또는 밝기 조절 중 하나라도 되면 버튼 표시
+    zoom = caps.zoom ? caps.zoom.min : 1; dz = 1; video.style.transform = '';
+    setupLight();
     try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch { /* 무시 */ }
   }
   function stopCam() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; track = null; video.srcObject = null; }
   function noCam() { $('#nocam').hidden = false; }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopCam(); else startCam(); });
-  $('#torch').onclick = async e => { torchOn = !torchOn; try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); e.currentTarget.classList.toggle('on', torchOn); } catch { torchOn = !torchOn; } };
-  $('#zoomBtn').onclick = async e => {
-    const z = caps.zoom, steps = [z.min, Math.min(z.max, z.min * 2), Math.min(z.max, z.min * 3)].filter((v, i, a) => a.indexOf(v) === i);
-    zoomIdx = (zoomIdx + 1) % steps.length;
-    try { await track.applyConstraints({ advanced: [{ zoom: steps[zoomIdx] }] }); e.currentTarget.textContent = Math.round(steps[zoomIdx] / z.min) + '×'; } catch { /* 무시 */ }
+  // 🔦 플래시: 누르면 켜지면서 밝기 슬라이더가 나오고, 다시 누르면 꺼짐
+  const fmtEv = v => (v > 0 ? '+' : '') + Number(v).toFixed(1);
+  function setupLight() {
+    const er = caps.exposureCompensation, r = $('#lightRange');
+    if (er && er.max > er.min) { r.min = er.min; r.max = er.max; r.step = er.step || 0.5; r.value = evVal; $('#lightVal').textContent = fmtEv(evVal); }
+  }
+  $('#lightRange').oninput = e => {
+    evVal = +e.target.value; $('#lightVal').textContent = fmtEv(evVal); placeThumb();
+    if (track) track.applyConstraints({ advanced: [{ exposureCompensation: evVal }] }).catch(() => {});
   };
+  $('#torch').onclick = async () => {
+    const btn = $('#torch'), er = caps.exposureCompensation, hasEv = er && er.max > er.min, on = !btn.classList.contains('on');
+    if (caps.torch) { try { await track.applyConstraints({ advanced: [{ torch: on }] }); torchOn = on; } catch { return toast('이 기기는 플래시를 켤 수 없어요', 'bad'); } } else torchOn = on;
+    btn.classList.toggle('on', on);
+    $('#lightPanel').hidden = !(on && hasEv);
+  };
+
+  /* ---------------- 두 손가락 확대·축소 ---------------- */
+  // 기기가 지원하면 실제 카메라 줌, 아니면 화면 확대(디지털). 읽는 영역 계산도 확대 배율(dz)을 반영
+  const pts = new Map(); let pinch = null, zTimer = null, zApplyT = 0;
+  const zLim = () => (caps.zoom ? { min: caps.zoom.min, max: Math.min(caps.zoom.max, 10), hw: true } : { min: 1, max: 4, hw: false });
+  function applyZoom(z) {
+    const L = zLim(); zoom = Math.min(L.max, Math.max(L.min, z));
+    if (L.hw) { dz = 1; const now = Date.now(); if (track && now - zApplyT > 50) { zApplyT = now; track.applyConstraints({ advanced: [{ zoom }] }).catch(() => {}); } }
+    else { dz = zoom; video.style.transform = `scale(${dz})`; }
+    const tip = $('#zoomTip'); tip.textContent = (zoom / L.min).toFixed(1) + '×'; tip.hidden = false;
+    clearTimeout(zTimer); zTimer = setTimeout(() => { tip.hidden = true; }, 900);
+  }
 
   /* ---------------- 탭 초점 (갤럭시 카메라 방식) ---------------- */
   // 화면을 톡 누르면 그 지점에 노란 초점 상자가 뜨고 초점을 맞춤 · 상자 옆 해 모양을 끌면 밝기 조절 · 길게 누르면 초점·밝기 잠금
   const fbox = $('#fbox'), fexp = $('#fexp'), fthumb = fexp.querySelector('i');
-  let fTimer = null, locked = false, evVal = 0, down = null;
+  let fTimer = null, locked = false, down = null;
   function placeThumb() { const er = caps.exposureCompensation; if (!er || er.max <= er.min) return; fthumb.style.top = (1 - (evVal - er.min) / (er.max - er.min)) * 100 + '%'; }
   function keepBox(ms) { clearTimeout(fTimer); if (ms) fTimer = setTimeout(() => { fbox.classList.add('fade'); setTimeout(() => { if (fbox.classList.contains('fade')) fbox.hidden = true; }, 380); }, ms); }
   function showBox(x, y, lock) {
@@ -77,8 +101,8 @@
   async function focusAt(cx, cy, lock) {
     const vw = video.videoWidth, vh = video.videoHeight; locked = !!lock;
     if (!track || !vw) return;
-    const cw = cam.clientWidth, ch = cam.clientHeight, s = Math.max(cw / vw, ch / vh), ox = (cw - vw * s) / 2, oy = (ch - vh * s) / 2;
-    const nx = Math.min(1, Math.max(0, (cx - ox) / s / vw)), ny = Math.min(1, Math.max(0, (cy - oy) / s / vh)), fm = caps.focusMode || [];
+    const cw = cam.clientWidth, ch = cam.clientHeight, k0 = Math.max(cw / vw, ch / vh) * dz;
+    const nx = Math.min(1, Math.max(0, ((cx - cw / 2) / k0 + vw / 2) / vw)), ny = Math.min(1, Math.max(0, ((cy - ch / 2) / k0 + vh / 2) / vh)), fm = caps.focusMode || [];
     const adv = { pointsOfInterest: [{ x: nx, y: ny }] };
     if (fm.includes('single-shot')) adv.focusMode = 'single-shot'; else if (fm.includes('continuous')) adv.focusMode = 'continuous';
     try { await track.applyConstraints({ advanced: [adv] }); }
@@ -87,19 +111,31 @@
     if (!lock && fm.includes('continuous')) setTimeout(() => { if (!locked && track) track.applyConstraints({ advanced: [{ focusMode: 'continuous', pointsOfInterest: [{ x: nx, y: ny }] }] }).catch(() => {}); }, 900);
   }
   cam.addEventListener('pointerdown', e => {
-    if (e.target.closest('.grip, button, label, #fexp, #nocam')) return;
+    if (e.target.closest('.grip, button, label, #fexp, #nocam, #lightPanel')) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { // 두 번째 손가락이 닿으면 확대·축소 시작 (탭/길게누르기는 취소)
+      if (down) { clearTimeout(down.timer); down = null; }
+      const [a, b] = [...pts.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: zoom }; return;
+    }
+    if (pts.size > 2) return;
     const r = cam.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top, moved: false, fired: false };
     down.timer = setTimeout(() => { if (down && !down.moved) { down.fired = true; showBox(down.x, down.y, true); focusAt(down.x, down.y, true); if (navigator.vibrate) navigator.vibrate(20); } }, 550);
   });
-  cam.addEventListener('pointermove', e => { if (!down) return; const r = cam.getBoundingClientRect(); if (Math.hypot(e.clientX - r.left - down.x, e.clientY - r.top - down.y) > 10) { down.moved = true; clearTimeout(down.timer); } });
-  cam.addEventListener('pointerup', () => { if (!down) return; clearTimeout(down.timer); const d = down; down = null; if (d.moved || d.fired) return; showBox(d.x, d.y, false); focusAt(d.x, d.y, false); });
-  cam.addEventListener('pointercancel', () => { if (down) { clearTimeout(down.timer); down = null; } });
+  cam.addEventListener('pointermove', e => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) { const [a, b] = [...pts.values()]; applyZoom(pinch.z0 * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0)); return; }
+    if (!down) return; const r = cam.getBoundingClientRect(); if (Math.hypot(e.clientX - r.left - down.x, e.clientY - r.top - down.y) > 10) { down.moved = true; clearTimeout(down.timer); }
+  });
+  const endPtr = e => { pts.delete(e.pointerId); if (pinch && pts.size < 2) { pinch = null; if (zLim().hw && track) track.applyConstraints({ advanced: [{ zoom }] }).catch(() => {}); return true; } return false; };
+  cam.addEventListener('pointerup', e => { const was = endPtr(e); if (was || !down) return; clearTimeout(down.timer); const d = down; down = null; if (d.moved || d.fired) return; showBox(d.x, d.y, false); focusAt(d.x, d.y, false); });
+  cam.addEventListener('pointercancel', e => { endPtr(e); if (down) { clearTimeout(down.timer); down = null; } });
   // 밝기(노출) 슬라이더
   function setEv(e) {
     const er = caps.exposureCompensation; if (!er) return;
     const r = fexp.getBoundingClientRect(), t = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
     evVal = er.min + (1 - t) * (er.max - er.min); if (er.step) evVal = Math.round(evVal / er.step) * er.step;
-    placeThumb(); if (track) track.applyConstraints({ advanced: [{ exposureCompensation: evVal }] }).catch(() => {});
+    placeThumb(); $('#lightRange').value = evVal; $('#lightVal').textContent = fmtEv(evVal);
+    if (track) track.applyConstraints({ advanced: [{ exposureCompensation: evVal }] }).catch(() => {});
   }
   fexp.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fexp.setPointerCapture(e.pointerId); fexp._d = true; keepBox(0); setEv(e); });
   fexp.addEventListener('pointermove', e => { if (fexp._d) setEv(e); });
@@ -181,9 +217,10 @@
   // 화면의 띠(빨간 선 구간) → 영상 좌표로 변환해 그 부분만 잘라 냄
   function grab() {
     const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
-    const cw = cam.clientWidth, ch = cam.clientHeight, s = Math.max(cw / vw, ch / vh), ox = (cw - vw * s) / 2, oy = (ch - vh * s) / 2;
-    const sx = Math.max(0, (cw * st.x0 - ox) / s), sx1 = Math.min(vw, (cw * st.x1 - ox) / s);
-    const sy = Math.max(0, (ch * (0.5 - st.band / 2) - oy) / s), sy1 = Math.min(vh, (ch * (0.5 + st.band / 2) - oy) / s);
+    // 화면 좌표 → 영상 좌표 (cover 배치 + 디지털 확대 dz 반영)
+    const cw = cam.clientWidth, ch = cam.clientHeight, k0 = Math.max(cw / vw, ch / vh) * dz, X = x => (x - cw / 2) / k0 + vw / 2, Y = y => (y - ch / 2) / k0 + vh / 2;
+    const sx = Math.max(0, X(cw * st.x0)), sx1 = Math.min(vw, X(cw * st.x1));
+    const sy = Math.max(0, Y(ch * (0.5 - st.band / 2))), sy1 = Math.min(vh, Y(ch * (0.5 + st.band / 2)));
     const w = sx1 - sx, h = sy1 - sy; if (w < 10 || h < 6) return null;
     const k = Math.min(1, 2400 / w), c = mk(w * k, h * k);
     c.getContext('2d').drawImage(video, sx, sy, w, h, 0, 0, c.width, c.height);
@@ -343,7 +380,7 @@
   const stamp = () => { const d = new Date(), p = x => String(x).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; };
   $('#mCopy').onclick = () => copy(st.memo);
   $('#mSave').onclick = () => { if (!st.memo.trim()) return toast('저장할 글자가 없어요', 'bad'); download(new Blob(['﻿', st.memo], { type: 'text/plain;charset=utf-8' }), `메모_${stamp()}.txt`); };
-  $('#mClear').onclick = () => { if (st.memo && confirm('메모장을 모두 지울까요?')) { hist.push({ mode: 'memo', memo: st.memo }); st.memo = ''; renderMemo(); save(); } };
+  const memoClear = () => { if (st.memo && confirm('메모장을 모두 지울까요?')) { hist.push({ mode: 'memo', memo: st.memo }); st.memo = ''; renderMemo(); save(); } };
 
   const colName = i => String.fromCharCode(65 + i);
   function renderGrid(scroll) {
@@ -354,7 +391,7 @@
       h += `<tr><td class="rn">${r + 1}</td>` + Array.from({ length: st.cols }, (_, c) => `<td class="${st.cur.r === r && st.cur.c === c ? 'cur' : ''}"><input data-r="${r}" data-c="${c}" value="${(st.grid[r][c] || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" autocomplete="off"></td>`).join('') + '</tr>';
     }
     $('#grid').innerHTML = h + '</tbody>';
-    $('#eDir').textContent = '다음 칸: ' + (st.dir === 'down' ? '아래 ↓' : '옆 →');
+    syncDir();
     if (scroll) { const cur = $('#grid td.cur'); if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
   }
   $('#grid').addEventListener('input', e => { const t = e.target; if (t.dataset.r == null) return; st.grid[+t.dataset.r][+t.dataset.c] = t.value; save(); });
@@ -363,13 +400,28 @@
     st.cur = { r: +t.dataset.r, c: +t.dataset.c };
     document.querySelectorAll('#grid td.cur').forEach(x => x.classList.remove('cur')); t.parentElement.classList.add('cur'); save();
   });
-  $('#eDir').onclick = () => { st.dir = st.dir === 'down' ? 'right' : 'down'; $('#eDir').textContent = '다음 칸: ' + (st.dir === 'down' ? '아래 ↓' : '옆 →'); save(); };
+  // 다음 칸 방향 선택 (아래 ↓ / 옆 →)
+  function syncDir() { document.querySelectorAll('#eDirSeg button').forEach(b => b.classList.toggle('on', b.dataset.dir === st.dir)); }
+  document.querySelectorAll('#eDirSeg button').forEach(b => { b.onclick = () => { st.dir = b.dataset.dir; syncDir(); save(); }; });
   $('#eNext').onclick = () => { st.cur.c = 0; st.cur.r++; ensureRow(st.cur.r); renderGrid(true); save(); };
-  $('#eColP').onclick = () => { if (st.cols < 8) { st.cols++; renderGrid(); save(); } };
-  $('#eColM').onclick = () => { if (st.cols > 1) { st.cols--; renderGrid(); save(); } };
   const gridRows = () => { const rows = st.grid.map(r => r.slice()); while (rows.length && rows[rows.length - 1].every(v => !v)) rows.pop(); return rows; };
-  $('#eCopy').onclick = () => copy(gridRows().map(r => r.join('\t')).join('\n'));
-  $('#eClear').onclick = () => { if (confirm('엑셀 표를 모두 지울까요?')) { st.grid = [Array(st.cols).fill('')]; st.cur = { r: 0, c: 0 }; renderGrid(); save(); } };
+  const eColP = () => { if (st.cols < 8) { st.cols++; renderGrid(); save(); } else toast('열은 최대 8개예요', 'bad'); };
+  const eColM = () => { if (st.cols > 1) { st.cols--; renderGrid(); save(); } };
+  const eCopy = () => copy(gridRows().map(r => r.join('\t')).join('\n'));
+  const eClear = () => { if (confirm('엑셀 표를 모두 지울까요?')) { st.grid = [Array(st.cols).fill('')]; st.cur = { r: 0, c: 0 }; renderGrid(); save(); } };
+
+  /* ---------------- ⋯ 더보기 (자주 안 쓰는 기능은 여기로) ---------------- */
+  function openMore(kind) {
+    const items = kind === 'memo'
+      ? [{ t: '메모 전체 지우기', fn: memoClear, warn: 1 }]
+      : [{ t: '표 복사', fn: eCopy }, { t: `열 추가 (지금 ${st.cols}열)`, fn: eColP }, { t: '열 줄이기', fn: eColM }, { t: '표 전체 지우기', fn: eClear, warn: 1 }];
+    const card = $('#moreCard'); card.innerHTML = '';
+    items.forEach(it => { const b = document.createElement('button'); b.textContent = it.t; if (it.warn) b.className = 'warn'; b.onclick = () => { $('#more').hidden = true; it.fn(); }; card.appendChild(b); });
+    const c = document.createElement('button'); c.textContent = '닫기'; c.className = 'cancel'; c.onclick = () => { $('#more').hidden = true; }; card.appendChild(c);
+    $('#more').hidden = false;
+  }
+  document.querySelectorAll('.more-btn').forEach(b => { b.onclick = () => openMore(b.dataset.more); });
+  $('#more').addEventListener('click', e => { if (e.target.id === 'more') $('#more').hidden = true; });
   const loadXlsx = () => new Promise((res, rej) => { if (window.XLSX) return res(); const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   const toCell = v => (/^-?[1-9]\d{0,14}(,\d{3})*(\.\d+)?$|^0(\.\d+)?$/.test(String(v).trim()) ? Number(String(v).replace(/,/g, '')) : v);
   $('#eSave').onclick = async () => {

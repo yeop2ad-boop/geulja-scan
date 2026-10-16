@@ -23,12 +23,13 @@
     <div class="cam-top">
       <span id="status" class="pill">엔진 준비 중…</span>
       <div class="cam-tools">
-        <button id="torch" class="ico" hidden>플래시</button>
-        <button id="zoomBtn" class="ico" hidden>1×</button>
+        <button id="torch" class="ico emo" hidden aria-label="플래시와 밝기">🔦</button>
       </div>
     </div>
     <!-- 갤럭시 카메라처럼: 화면을 누르면 노란 초점 상자 + 밝기 슬라이더, 길게 누르면 초점·밝기 잠금 -->
     <div id="fbox" hidden><span id="flock">AE/AF 잠김</span><div id="fexp" hidden><em></em><i></i></div></div>
+    <div id="lightPanel" hidden><span>☀</span><input type="range" id="lightRange" aria-label="밝기"><span id="lightVal">0</span></div>
+    <div id="zoomTip" hidden>1.0×</div>
     <div id="toast"></div>
     <div class="cam-bottom">
       <span id="last" class="last">읽은 글자가 여기 나와요</span>
@@ -73,26 +74,30 @@
   <section id="p-memo" class="panel">
     <textarea id="memo" placeholder="셔터를 누르면 읽은 글자가 옆으로 이어서 적혀요" spellcheck="false"></textarea>
     <div class="tools">
-      <button id="mNl">줄바꿈 ↵</button>
-      <button id="mCopy">복사</button>
-      <button id="mSave">저장(.txt)</button>
-      <button id="mClear" class="warn">지우기</button>
+      <button id="mNl" class="t2">↵ 줄바꿈</button>
+      <button id="mCopy" class="t2">복사</button>
+      <span class="grow"></span>
+      <button id="mSave" class="t1">저장</button>
+      <button class="more-btn" data-more="memo" aria-label="더보기">⋯</button>
     </div>
   </section>
 
   <section id="p-excel" class="panel" hidden>
     <div id="gridWrap"><table id="grid"></table></div>
     <div class="tools">
-      <button id="eDir">다음 칸: 아래 ↓</button>
-      <button id="eNext">다음 줄 ↵</button>
-      <button id="eColP">열 ＋</button>
-      <button id="eColM">열 －</button>
-      <button id="eCopy">복사</button>
-      <button id="eSave">엑셀 저장</button>
-      <button id="eClear" class="warn">지우기</button>
+      <div class="seg3" id="eDirSeg" title="찍을 때마다 다음 칸으로 가는 방향">
+        <button data-dir="down" class="on">↓ 아래</button>
+        <button data-dir="right">→ 옆</button>
+      </div>
+      <button id="eNext" class="t2">↵ 다음 줄</button>
+      <span class="grow"></span>
+      <button id="eSave" class="t1">엑셀 저장</button>
+      <button class="more-btn" data-more="excel" aria-label="더보기">⋯</button>
     </div>
   </section>
 </div>
+
+<div id="more" hidden><div class="more-card" id="moreCard"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="app.js"></script>
