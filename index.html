@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#000000">
 <title>글자스캔정리</title>
 <link rel="manifest" href="manifest.json">
@@ -10,120 +10,89 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><img class="logo-img" src="icon.svg" alt=""> 글자스캔정리</div>
-</header>
+<div id="app">
 
-<main>
-  <!-- 프로젝트 목록 -->
-  <section id="homeView">
-    <h1 class="h1">사진만 찍으면<br>표로 정리해 드려요</h1>
-    <p class="sub">여러 장을 한꺼번에 올리면 같은 패턴끼리 모아서<br>엑셀과 문서로 만들어 줘요.</p>
-    <div id="projList"></div>
-    <button class="btn primary big full" id="newProjBtn">새 프로젝트 만들기</button>
-  </section>
-
-  <!-- 프로젝트 화면 -->
-  <section id="projView" hidden>
-    <div class="proj-head">
-      <button class="btn small" id="backBtn">← 목록</button>
-      <input id="projName" class="proj-name">
-      <button class="x" id="delProjBtn" title="프로젝트 삭제">삭제</button>
+  <!-- 카메라: 가운데 반투명 띠 + 빨간 선 안의 글자만 읽어요 -->
+  <section id="cam">
+    <video id="video" playsinline muted autoplay></video>
+    <div id="band">
+      <i id="redline"></i>
+      <b class="grip" id="gripL" aria-label="왼쪽 끝 조절"></b>
+      <b class="grip" id="gripR" aria-label="오른쪽 끝 조절"></b>
     </div>
-    <div class="add-btns">
-      <button class="btn primary" id="camBtn">촬영하기</button>
-      <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-      <label class="btn">앨범에서 여러 장
-        <input type="file" id="fileInput" accept="image/*" multiple hidden>
-      </label>
-    </div>
-    <div id="queueInfo" class="queue" hidden></div>
-    <div id="items"></div>
-
-    <div id="resultBox" hidden>
-      <div class="seg">
-        <button class="segbtn active" data-mode="merged">같은 패턴 합치기</button>
-        <button class="segbtn" data-mode="photo">사진별 보기</button>
-      </div>
-      <div id="repeats" class="repeats"></div>
-      <div id="sections"></div>
-      <section id="tools">
-        <h3 class="tools-title">더 많은 기능</h3>
-        <div class="tools-grid">
-          <button class="tool" data-tool="pick"><b>선택 추출</b><span>선을 그은 부분의 글자만 모으기</span></button>
-          <button class="tool" data-tool="find"><b>검색해서 모으기</b><span>단어가 들어간 줄만 모든 사진에서</span></button>
-          <button class="tool" data-tool="style"><b>글자 색·크기별 보기</b><span>같은 색·같은 크기 글자끼리 모아 읽기</span></button>
-          <button class="tool" data-tool="sum"><b>숫자 합계</b><span>숫자 열의 합계·평균</span></button>
-          <button class="tool" data-tool="dedupe" id="dedupeBtn"><b>중복 줄 제거</b><span id="dedupeState">같은 내용 줄을 하나로 · 꺼짐</span></button>
-        </div>
-        <div id="extras"></div>
-      </section>
-      <div class="export-bar">
-        <button class="btn primary" id="xlsxBtn">엑셀로 저장</button>
-        <button class="btn" id="docBtn">Word로 저장</button>
-        <button class="btn" id="copyBtn">복사</button>
+    <div class="cam-top">
+      <span id="status" class="pill">엔진 준비 중…</span>
+      <div class="cam-tools">
+        <button id="torch" class="ico" hidden>플래시</button>
+        <button id="zoomBtn" class="ico" hidden>1×</button>
       </div>
     </div>
+    <div id="toast"></div>
+    <div class="cam-bottom">
+      <span id="last" class="last">읽은 글자가 여기 나와요</span>
+      <div class="cam-btns">
+        <button id="bandMinus" class="ico" aria-label="줄 높이 줄이기">줄 −</button>
+        <button id="bandPlus" class="ico" aria-label="줄 높이 늘리기">줄 ＋</button>
+        <button id="undo" class="ico" aria-label="방금 입력 취소">↶ 취소</button>
+      </div>
+    </div>
+    <div id="nocam" hidden>
+      <p>카메라를 쓸 수 없어요.<br>권한을 허용하거나, 사진으로 읽어 보세요.</p>
+      <label class="btn">사진으로 읽기<input type="file" id="fileIn" accept="image/*" capture="environment" hidden></label>
+    </div>
   </section>
-</main>
 
-<div id="viewer" hidden>
-  <div class="vhead"><div><b id="vTitle"></b> <span id="vCount"></span></div><div class="vbtns"><button class="vclose" id="vFix">보정</button><button class="vclose" id="vClose">닫기</button></div></div>
-  <div id="vFixNote" class="vfixnote"></div>
-  <div id="vstage">
-    <div id="vimg"><img id="vphoto" alt="" draggable="false"><div id="vlayer"></div></div>
-    <button class="vnav l" id="vPrev" aria-label="이전">‹</button><button class="vnav r" id="vNext" aria-label="다음">›</button>
+  <!-- 셔터 -->
+  <div id="bar">
+    <div class="opt">
+      <small>띄어쓰기</small>
+      <div class="seg2" id="optSpace">
+        <button data-sp="keep" class="on">포함</button>
+        <button data-sp="strip">빼고</button>
+      </div>
+    </div>
+    <button id="shutter" aria-label="촬영해서 글자 입력"></button>
+    <div class="opt">
+      <small>읽을 내용</small>
+      <div class="seg2" id="optKind">
+        <button data-kind="text">글자만</button>
+        <button data-kind="num">숫자만</button>
+        <button data-kind="all" class="on">전체</button>
+      </div>
+    </div>
   </div>
-  <div class="vfoot">
-    <div id="vStatus" class="vstatus"></div>
-    <div class="vlegend2"><button class="lg ok" id="vOk"></button><button class="lg bad" id="vBad"></button><button class="lg zone" id="vZone"></button><button class="lg mark" id="vMark"></button><button class="lg style off" id="vStyle"></button></div>
-    <div class="vhelp">두 손가락으로 확대·축소 · 두 번 탭하면 확대 · 옆으로 밀면 다음 사진</div>
-  </div>
-</div>
 
+  <!-- 메모장 / 엑셀 선택 -->
+  <nav class="tabs">
+    <button data-mode="memo" class="on">메모장</button>
+    <button data-mode="excel">엑셀</button>
+  </nav>
 
-<div id="pick" hidden>
-  <div class="vhead"><button class="vclose" id="pkClose">닫기</button><b>선택 추출</b><button class="vclose pri" id="pkAdd">결과에 추가</button></div>
-  <div id="pkBody">
-    <div id="pkChips" class="pk-chips"></div>
-    <p class="pk-help">뽑고 싶은 글자 <b>위를 손가락으로 쓱 그어</b> 주세요. 그은 부분의 글자만 가져와요.</p>
-    <div id="pkStage"><div id="pkInner"><img id="pkImg" alt="" draggable="false"><canvas id="pkCv"></canvas></div></div>
-    <div class="pk-ctrl"><button class="lg" id="pkPrev">‹</button><span id="pkWho"></span><button class="lg" id="pkNext">›</button><button class="lg" id="pkClear">선 지우기</button></div>
-    <div class="seg" id="pkMode"><button class="segbtn active" data-pm="column">같은 열 모두 (모든 사진)</button><button class="segbtn" data-pm="cells">선택한 칸만</button></div>
-    <div id="pkResult"></div>
-  </div>
-</div>
+  <section id="p-memo" class="panel">
+    <textarea id="memo" placeholder="셔터를 누르면 읽은 글자가 옆으로 이어서 적혀요" spellcheck="false"></textarea>
+    <div class="tools">
+      <button id="mNl">줄바꿈 ↵</button>
+      <button id="mCopy">복사</button>
+      <button id="mSave">저장(.txt)</button>
+      <button id="mClear" class="warn">지우기</button>
+    </div>
+  </section>
 
-<div id="sheet" hidden>
-  <div class="sheet-card">
-    <div class="vhead"><b id="shTitle"></b><button class="vclose" id="shClose">닫기</button></div>
-    <div id="shBody"></div>
-    <button class="btn primary full" id="shAdd">결과에 추가</button>
-  </div>
-</div>
-
-<div id="cam" hidden>
-  <div id="camStage"><video id="camVideo" playsinline muted autoplay></video><canvas id="camOverlay"></canvas><div id="camFlash"></div><div id="camOk" class="camok" hidden>OK ✓</div></div>
-  <div id="camStatus" class="camstatus"></div>
-  <div class="camchips"><span id="chipEdge" class="chip2">▢ 가장자리</span><span id="chipFocus" class="chip2">◎ 초점</span><span id="chipLight" class="chip2">☀ 밝기</span><span id="chipAngle" class="chip2">∠ 각도</span></div>
-  <div class="camfoot"><button class="camside" id="camDone">완료</button><button id="camShot" class="camshot" aria-label="촬영"></button><div class="camcount" id="camCount"></div></div>
-</div>
-
-<div id="editor" hidden>
-  <div class="vhead"><button class="vclose" id="edCancel">취소</button><b>사진 보정</b><button class="vclose pri" id="edApply">적용</button></div>
-  <div id="edStage"><div id="edBox"><img id="edImg" alt="" draggable="false"><svg id="edSvg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon id="edPoly"/></svg><div class="edh"></div><div class="edh"></div><div class="edh"></div><div class="edh"></div></div></div>
-  <div class="vfoot"><div class="vhelp">네 모서리를 끌어 종이 가장자리에 맞추면 반듯하게 펴 드려요</div><div class="vlegend2"><button class="lg" id="edAuto">자동 감지</button><button class="lg" id="edReset">초기화</button><button class="lg" id="edNone">보정 없이</button></div></div>
+  <section id="p-excel" class="panel" hidden>
+    <div id="gridWrap"><table id="grid"></table></div>
+    <div class="tools">
+      <button id="eDir">다음 칸: 아래 ↓</button>
+      <button id="eNext">다음 줄 ↵</button>
+      <button id="eColP">열 ＋</button>
+      <button id="eColM">열 －</button>
+      <button id="eCopy">복사</button>
+      <button id="eSave">엑셀 저장</button>
+      <button id="eClear" class="warn">지우기</button>
+    </div>
+  </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="analyze.js"></script>
-<script src="styles.js"></script>
-<script src="imageproc.js"></script>
 <script src="app.js"></script>
-<script src="viewer.js"></script>
-<script src="camera.js"></script>
-<script src="editor.js"></script>
-<script src="tools.js"></script>
 </body>
 </html>
