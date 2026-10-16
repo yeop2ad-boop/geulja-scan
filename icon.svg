@@ -1,45 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset=".55" stop-color="#4f46e5"/><stop offset="1" stop-color="#312e81"/></linearGradient>
-    <radialGradient id="hl" cx=".2" cy=".1" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
-    <linearGradient id="phone" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c7d2fe"/></linearGradient>
-    <linearGradient id="scr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e1b4b"/><stop offset="1" stop-color="#0b1026"/></linearGradient>
-    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee" stop-opacity="0"/><stop offset=".5" stop-color="#67e8f9"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient>
-    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22d3ee" stop-opacity="0"/><stop offset="1" stop-color="#22d3ee" stop-opacity=".28"/></linearGradient>
-    <filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#0b1026" flood-opacity=".5"/></filter>
-    <filter id="glow" x="-20%" y="-400%" width="140%" height="900%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <rect width="512" height="512" fill="url(#hl)"/>
-  <g transform="translate(256 256) scale(1.03) translate(-248 -250)">
-    <!-- 영수증 -->
-    <g transform="rotate(-8 160 300)" filter="url(#sh)">
-      <path d="M52 150H250V430L235 444 220 430 205 444 190 430 175 444 160 430 145 444 130 430 115 444 100 430 85 444 70 430 52 430Z" fill="#fff"/>
-      <rect x="78" y="180" width="86" height="18" rx="9" fill="#312e81"/>
-      <rect x="78" y="212" width="52" height="9" rx="4.5" fill="#a5b4fc"/>
-      <g fill="#c7d2fe"><rect x="78" y="252" width="84" height="12" rx="6"/><rect x="78" y="284" width="66" height="12" rx="6"/><rect x="78" y="316" width="92" height="12" rx="6"/><rect x="78" y="348" width="58" height="12" rx="6"/></g>
-      <g fill="#818cf8"><rect x="196" y="252" width="30" height="12" rx="6"/><rect x="196" y="284" width="30" height="12" rx="6"/><rect x="196" y="316" width="30" height="12" rx="6"/><rect x="196" y="348" width="30" height="12" rx="6"/></g>
-      <rect x="78" y="384" width="148" height="18" rx="9" fill="#312e81"/>
-    </g>
-    <!-- 폰 -->
-    <g transform="rotate(9 340 250)" filter="url(#sh)">
-      <rect x="232" y="56" width="212" height="388" rx="50" fill="url(#phone)"/>
-      <rect x="244" y="68" width="188" height="364" rx="40" fill="url(#scr)"/>
-      <rect x="310" y="80" width="56" height="14" rx="7" fill="#05070f"/>
-      <!-- 화면 속 표 -->
-      <g>
-        <rect x="270" y="142" width="54" height="40" rx="10" fill="#fff" opacity=".6"/><rect x="332" y="142" width="74" height="40" rx="10" fill="#fff" opacity=".38"/>
-        <rect x="270" y="194" width="54" height="40" rx="10" fill="#fff" opacity=".24"/><rect x="332" y="194" width="74" height="40" rx="10" fill="#fff" opacity=".14"/>
-        <rect x="270" y="246" width="54" height="40" rx="10" fill="#fff" opacity=".24"/><rect x="332" y="246" width="74" height="40" rx="10" fill="#fff" opacity=".14"/>
-        <rect x="270" y="298" width="54" height="40" rx="10" fill="#fff" opacity=".24"/><rect x="332" y="298" width="74" height="40" rx="10" fill="#fff" opacity=".14"/>
-      </g>
-      <!-- 스캔 빔 -->
-      <rect x="254" y="190" width="168" height="40" fill="url(#band)"/>
-      <rect x="254" y="228" width="168" height="6" rx="3" fill="url(#beam)" filter="url(#glow)"/>
-      <!-- 스캔 프레임 -->
-      <path d="M262 150V112h38M414 150V112h-38M262 346v38h38M414 346v38h-38" fill="none" stroke="#22d3ee" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-      <!-- 인식 완료 체크 -->
-      <circle cx="408" cy="162" r="17" fill="#22c55e"/><path d="M399 162l7 7 13-14" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
+  <rect width="512" height="512" fill="#2563eb"/>
+  <!-- 스캔 프레임(뷰파인더 네 모서리) -->
+  <g fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 170V96h74M342 96h74v74M416 342v74h-74M170 416H96v-74"/>
+  </g>
+  <!-- 가 -->
+  <g fill="none" stroke="#fff" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M180 196H282V318"/>
+    <path d="M342 168V344M342 256H392"/>
   </g>
 </svg>
