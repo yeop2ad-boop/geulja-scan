@@ -1,6 +1,6 @@
 {
-  "name": "글자스캔정리",
-  "short_name": "글자스캔정리",
+  "name": "글자스캐너 - 문자인식 카메라",
+  "short_name": "글자스캐너",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
