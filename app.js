@@ -39,7 +39,7 @@
     if (stream) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return noCam();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1440 } }, audio: false });
     } catch (e) { return noCam(); }
     $('#nocam').hidden = true;
     video.srcObject = stream; await video.play().catch(() => {});
@@ -143,7 +143,7 @@
   fexp.addEventListener('pointerup', endEv); fexp.addEventListener('pointercancel', endEv);
 
   /* ---------------- 글자 인식 엔진 ---------------- */
-  let worker = null, engWorker = null, ready = false;
+  let worker = null, engWorker = null, ready = false, lastConf = 100;
   const readyP = (async () => {
     try {
       worker = await Tesseract.createWorker('kor+eng', 1, {
@@ -183,7 +183,7 @@
     return toks.reduce((s, t, i) => s + (i && keep.has(i - 1) ? ' ' : '') + t, '');
   }
   // 엔진이 자주 틀리는 기호: ₩ → \ , 괄호 안쪽 공백
-  const cleanEdge = t => t.replace(/^[|_~'"`\s]+|[|_~'"`\s]+$/g, '').replace(/\s{2,}/g, ' ').replace(/\\(?=\d)/g, '₩').replace(/([(\[{])\s+/g, '$1').replace(/\s+([)\]}])/g, '$1');
+  const cleanEdge = t => t.replace(/^[|_~'"`\s]+|[|_~'"`\s]+$/g, '').replace(/\s{2,}/g, ' ').replace(/[\\¥￥](?=\d)/g, '₩').replace(/([(\[{])\s+/g, '$1').replace(/\s+([)\]}])/g, '$1');
   // 숫자 쉼표 보정: 한글 엔진은 "4,500"의 쉼표를 빠뜨리곤 함. 영어 전용 엔진이 같은 숫자(자릿수 동일)를 쉼표 포함으로 읽었을 때만 그 표기를 채택
   const VALID_COMMA = /^\d{1,3}(,\d{3})+(\.\d+)?$/;
   async function fixNumbers(text, canvas) {
@@ -196,6 +196,32 @@
       const dg = tk.replace(/\D/g, ''), hit = et.find(x => x.replace(/\D/g, '') === dg);
       return hit || tk;
     });
+  }
+  // 자신 없을 때의 구조 요청: 사진에서 잰 "진짜 띄어쓰기"를 경계로 덩어리별로 따로 읽음.
+  // 한 줄에 짧은 한글+긴 숫자가 섞이면 엔진이 헷갈리므로(예: "합계 8461927350"), 덩어리마다 한 단어 모드로 읽고
+  // 숫자 위주 덩어리는 숫자 전용(0-9 , . - : / %)으로 한 번 더 읽어 자신 있는 쪽을 쓴다.
+  async function segmentRead(canvas) {
+    const gaps = canvas.__gaps; if (!gaps || !gaps.length) return null;
+    const H = canvas.height, cuts = [canvas.__L, ...gaps.flatMap(g => [g.c - g.w / 2, g.c + g.w / 2]), canvas.__R + 1], texts = [];
+    let confSum = 0, confN = 0;
+    try {
+      await worker.setParameters({ tessedit_pageseg_mode: '8' });
+      for (let i = 0; i < cuts.length; i += 2) {
+        const x0 = Math.max(0, Math.floor(cuts[i] - 6)), x1 = Math.min(canvas.width, Math.ceil(cuts[i + 1] + 6)); if (x1 - x0 < 8) continue;
+        const c = mk(x1 - x0, H); c.getContext('2d').drawImage(canvas, x0, 0, x1 - x0, H, 0, 0, x1 - x0, H);
+        const { data } = await worker.recognize(c); let t = data.text.replace(/\s+/g, ' ').trim(), cf = data.confidence || 0;
+        const flat = t.replace(/\s/g, ''), digs = (flat.match(/\d/g) || []).length;
+        if (engWorker && digs >= 5 && digs / Math.max(1, flat.length) >= 0.7) { // 숫자 덩어리 → 숫자 전용 재읽기
+          try {
+            await engWorker.setParameters({ tessedit_char_whitelist: '0123456789,.-:/%', tessedit_pageseg_mode: '8' });
+            const r2 = await engWorker.recognize(c); const t2 = r2.data.text.replace(/\s+/g, '').trim();
+            if (t2 && (r2.data.confidence || 0) >= cf - 3) { t = t2; cf = r2.data.confidence || cf; }
+          } finally { await engWorker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '7' }).catch(() => {}); }
+        }
+        if (t) { texts.push(t); confSum += cf * flat.length; confN += flat.length; }
+      }
+    } finally { await worker.setParameters({ tessedit_pageseg_mode: '7' }).catch(() => {}); }
+    return texts.length ? { text: texts.join(' '), conf: confN ? confSum / confN : 0 } : null;
   }
   async function recognize(canvas) {
     await readyP; if (!worker) throw new Error('engine');
@@ -210,6 +236,19 @@
       const r2 = await run(); await worker.setParameters({ tessedit_pageseg_mode: '7' });
       if (r2.conf > r.conf && r2.text) r = r2;
     }
+    // 덩어리별 재확인: ① 자신 없을 때 ② 5자리 이상 숫자가 있을 때(숫자 전용 엔진으로 교차 확인)
+    const longNum = /\d{5,}/.test(r.text);
+    if ((r.conf < 80 || longNum) && !window.__noRescue) {
+      try {
+        const alt = await segmentRead(canvas);
+        if (alt && alt.text) {
+          const runs = t => (t.match(/\d[\d,.-]*\d/g) || []).map(x => x.replace(/\D/g, '')).join('|'); // 쉼표·점은 빼고 숫자만 비교(표기만 다르면 원래 것 유지)
+          if (r.conf < 80) { if (alt.conf > r.conf + 2) r = alt; }
+          else if (runs(alt.text) !== runs(r.text) && alt.conf >= r.conf - 8) r = alt; // 숫자 읽기가 서로 다르면 숫자 전용 쪽을 채택
+        }
+      } catch { /* 실패하면 원래 결과 */ }
+    }
+    lastConf = r.conf; // 엔진이 얼마나 자신 있어 하는지(0~100) — 자신 없을 때만 추가 확인
     return fixNumbers(r.text, canvas);
   }
 
@@ -226,8 +265,36 @@
     c.getContext('2d').drawImage(video, sx, sy, w, h, 0, 0, c.width, c.height);
     return c;
   }
-  // 아주 가벼운 정리: 회색조 → 밝기 늘리기 → (밝은 글자면 뒤집기) → 띠 가운데 글줄만 남기고 알맞은 크기로
+  // 글줄 기울기 바로잡기: 손으로 들면 글줄이 몇 도 기울어지는데, 9°만 넘어도 3→4, 7→2, 5→7 같은 숫자 혼동이 생김(측정 확인).
+  // 띠 사진을 작게 줄여 "글자 점들의 가로줄 분포가 가장 뾰족해지는 각도"를 찾아 그만큼 돌려 세운다. 1.5° 미만이면 건드리지 않음.
+  function deskewBand(c) {
+    const sc = Math.min(1, 520 / c.width), w = Math.max(8, Math.round(c.width * sc)), h = Math.max(8, Math.round(c.height * sc));
+    const s = mk(w, h), g = s.getContext('2d', { willReadFrequently: true }); g.drawImage(c, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data, gray = new Uint8Array(w * h), hist = new Uint32Array(256);
+    for (let i = 0, j = 0; j < gray.length; i += 4, j++) { const v = (77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) >> 8; gray[j] = v; hist[v]++; }
+    const tot = w * h; let sumAll = 0; for (let v = 0; v < 256; v++) sumAll += v * hist[v];
+    let wB = 0, sB = 0, bv = -1, th0 = 128;
+    for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sumAll - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > bv) { bv = v; th0 = t; } }
+    let nD = 0; for (let v = 0; v <= th0; v++) nD += hist[v];
+    const inkIsLight = tot - nD < nD, xs = [], ys = [], step = Math.max(1, Math.floor(Math.sqrt(tot / 14000)));
+    for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) { if ((x + y * 3) % step) continue; const v = gray[y * w + x]; if (inkIsLight ? v > th0 : v <= th0) { xs.push(x); ys.push(y); } }
+    if (xs.length < 60) return null;
+    const bins = new Float32Array(h + w + 8), off = w + 4;
+    const score = deg => { const t = deg * Math.PI / 180, cs = Math.cos(t), sn = Math.sin(t); bins.fill(0); for (let i = 0; i < xs.length; i++) bins[(ys[i] * cs - xs[i] * sn + off) | 0]++; let q = 0; for (let i = 0; i < bins.length; i++) q += bins[i] * bins[i]; return q; };
+    let best = 0, bs = -1;
+    for (let a = -14; a <= 14; a += 1) { const q = score(a); if (q > bs) { bs = q; best = a; } }
+    for (let a = best - 1; a <= best + 1; a += 0.25) { const q = score(a); if (q > bs) { bs = q; best = a; } }
+    if (Math.abs(best) < 1.5 || bs < score(0) * 1.03) return null;
+    const t = best * Math.PI / 180, cs = Math.abs(Math.cos(t)), sn = Math.abs(Math.sin(t));
+    const W = Math.min(2600, Math.round(c.width * cs + c.height * sn)), H = Math.round(c.width * sn + c.height * cs);
+    const out = mk(W, H), og = out.getContext('2d');
+    const corner = c.getContext('2d').getImageData(0, 0, 1, 1).data; og.fillStyle = `rgb(${corner[0]},${corner[1]},${corner[2]})`; og.fillRect(0, 0, W, H);
+    og.imageSmoothingQuality = 'high'; og.translate(W / 2, H / 2); og.rotate(-t); og.drawImage(c, -c.width / 2, -c.height / 2);
+    return out;
+  }
+  // 아주 가벼운 정리: 기울기 → 회색조 → 밝기 늘리기 → (밝은 글자면 뒤집기) → 띠 가운데 글줄만 남기고 알맞은 크기로
   function prepLine(c) {
+    const dsk = deskewBand(c); if (dsk) c = dsk;
     const w = c.width, h = c.height, g = c.getContext('2d', { willReadFrequently: true }), d = g.getImageData(0, 0, w, h).data;
     const gray = new Uint8Array(w * h), hist = new Uint32Array(256);
     for (let i = 0, j = 0; j < gray.length; i += 4, j++) { const v = (77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) >> 8; gray[j] = v; hist[v]++; }
@@ -243,19 +310,19 @@
     for (let v = 0; v < 256; v++) { if (v <= th0) { nD += hist[v]; sD += v * hist[v]; } else { nL += hist[v]; sL += v * hist[v]; } }
     if (!nD || !nL) return null;
     const mD = sD / nD, mL = sL / nL;
-    if (mL - mD < 30) return null; // 대비가 없으면 글자가 없는 것
+    if (mL - mD < 20) return null; // 대비가 거의 없으면 글자가 없는 것
     const inkIsLight = nL < nD, sc = 255 / (mL - mD);
     for (let j = 0; j < gray.length; j++) { let v = Math.max(0, Math.min(255, (gray[j] - mD) * sc)); gray[j] = inkIsLight ? 255 - v : v; } // 항상 "밝은 바탕 + 어두운 글자"로
     // 글줄 찾기: 잉크(어두운 점)가 있는 가로줄 묶음 중 띠 가운데를 지나는 것(없으면 가장 큰 것)
-    const rowInk = new Uint32Array(h), thr = 120;
+    const rowInk = new Uint32Array(h), thr = 165; // 얇거나 흐린 글자도 잡히도록 넉넉하게
     for (let y = 0; y < h; y++) { let n = 0; for (let x = 0; x < w; x++) if (gray[y * w + x] < thr) n++; rowInk[y] = n; }
-    const minInk = Math.max(2, w * 0.004), segs = []; let s0 = -1;
+    const minInk = Math.max(1, w * 0.0012), segs = []; let s0 = -1;
     for (let y = 0; y <= h; y++) {
       const on = y < h && rowInk[y] > minInk;
       if (on && s0 < 0) s0 = y;
       if (!on && s0 >= 0) { let mass = 0; for (let k = s0; k < y; k++) mass += rowInk[k]; segs.push({ a: s0, b: y, mass }); s0 = -1; }
     }
-    if (!segs.length) return null;
+    if (!segs.length) segs.push({ a: 0, b: h, mass: 1 }); // 글줄을 못 찾아도 포기하지 않고 띠 전체를 읽어 봄
     const gap = Math.max(2, h * 0.1), merged = [segs[0]];
     for (let i = 1; i < segs.length; i++) { const l = merged[merged.length - 1]; if (segs[i].a - l.b <= gap) { l.b = segs[i].b; l.mass += segs[i].mass; } else merged.push({ ...segs[i] }); }
     const mid = h / 2, maxMass = Math.max(...merged.map(s => s.mass));
@@ -264,7 +331,7 @@
     // 가로로 글자가 있는 범위
     let left = w, right = 0;
     for (let y = top; y < bot; y++) for (let x = 0; x < w; x++) if (gray[y * w + x] < thr) { if (x < left) left = x; if (x > right) right = x; }
-    if (right <= left) return null;
+    if (right <= left) { left = 0; right = w; } // 가로 범위를 못 찾아도 띠 전체로
     const th = bot - top, padY = Math.round(th * 0.35), padX = Math.round(th * 0.8);
     top = Math.max(0, top - padY); bot = Math.min(h, bot + padY); left = Math.max(0, left - padX); right = Math.min(w, right + padX);
     const cw = right - left, chh = bot - top;
@@ -330,13 +397,32 @@
   document.querySelectorAll('#optSpace button').forEach(b => { b.onclick = () => { st.space = b.dataset.sp; syncOpts(); save(); }; });
   document.querySelectorAll('#optKind button').forEach(b => { b.onclick = () => { st.kind = b.dataset.kind; syncOpts(); save(); }; });
 
-  async function process(canvas) {
+  // 숫자 다수결: 같은 순간에 찍은 여러 장의 읽기 결과를 글자 자리별로 비교해, 한 장에서만 튄 오독(손떨림·반사 등)을 바로잡음
+  function vote(texts) {
+    const p = texts[0], same = texts.filter(t => t.length === p.length);
+    if (same.length >= 2) {
+      let out = '';
+      for (let i = 0; i < p.length; i++) { const cnt = {}; same.forEach(t => { cnt[t[i]] = (cnt[t[i]] || 0) + 1; }); const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]); out += top[0][1] > (cnt[p[i]] || 0) ? top[0][0] : p[i]; }
+      return out;
+    }
+    const others = texts.slice(1); // 첫 장만 길이가 다르면: 나머지 두 장이 똑같이 읽었을 때 그쪽을 채택
+    if (others.length >= 2 && others[0] === others[1]) return others[0];
+    return p;
+  }
+  async function process(canvas, extras) {
     const t0 = performance.now();
     try {
       const line = prepLine(canvas);
-      if (!line) { toast('글자를 찾지 못했어요', 'bad'); return; }
+      if (!line) { toast('글자가 너무 작거나 흐려요 · 더 가까이 비춰 주세요', 'bad'); return; }
       const kind = st.kind, space = st.space; // 누른 순간의 선택을 적용
-      const text = finalize(await recognize(line));
+      let raw = await recognize(line);
+      if (extras && !window.__noVote && /\d{3,}/.test(raw) && lastConf < 88) { // 숫자가 있고 엔진이 자신 없을 때만: 연달아 찍은 2장을 더 읽어 다수결
+        await new Promise(r => setTimeout(r, Math.max(0, 170 - (performance.now() - t0)))); // 추가 프레임이 찍힐 시간
+        const texts = [raw];
+        for (const x of extras) { const l2 = x && prepLine(x); if (l2) { try { const t = await recognize(l2); if (t) texts.push(t); } catch { /* 무시 */ } } }
+        if (texts.length >= 3) raw = vote(texts);
+      }
+      const text = finalize(raw);
       if (!text) { toast(kind === 'num' ? '숫자를 찾지 못했어요' : kind === 'text' ? '글자를 찾지 못했어요' : '글자를 읽지 못했어요 · 다시 맞춰 주세요', 'bad'); return; }
       commit(text);
       flash('ok'); toast(text); if (navigator.vibrate) navigator.vibrate(25);
@@ -347,8 +433,9 @@
   function shoot() {
     const c = grab();
     if (!c) return toast('카메라를 준비하는 중이에요', 'bad');
+    const extras = []; [70, 140].forEach(ms => setTimeout(() => { const x = grab(); if (x) extras.push(x); }, ms)); // 숫자 다수결용 추가 프레임
     pending++; setBusy();
-    chain = chain.then(() => process(c)).finally(() => { pending--; setBusy(); }); // 연달아 눌러도 순서대로 입력
+    chain = chain.then(() => process(c, extras)).finally(() => { pending--; setBusy(); }); // 연달아 눌러도 순서대로 입력
   }
   $('#shutter').onclick = shoot;
   document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); shoot(); } });

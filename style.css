@@ -119,3 +119,9 @@ button,textarea,input{font-family:inherit;color:inherit}
 .more-card button{border:0;background:var(--card);color:var(--tx);border-radius:12px;height:50px;font-size:15px;font-weight:800;cursor:pointer;text-align:left;padding:0 16px}
 .more-card button.warn{color:#dc2626}
 .more-card button.cancel{text-align:center;background:transparent;color:var(--mut);height:44px}
+/* 셔터 양옆 안내가 잘 보이도록: 제목 크고 진하게, 안 고른 칸도 또렷하게 */
+.opt small{font-size:12.5px;font-weight:800;color:var(--tx);letter-spacing:0}
+.seg2{background:var(--ln);padding:3px;box-shadow:inset 0 0 0 1px rgba(128,128,128,.25)}
+.seg2 button{color:var(--tx2,#374151);font-size:13px;height:34px;font-weight:800}
+@media (prefers-color-scheme:dark){.seg2 button{color:#d1d5db}}
+.seg2 button.on{background:var(--ac);color:var(--act);box-shadow:0 1px 5px rgba(0,0,0,.3)}
